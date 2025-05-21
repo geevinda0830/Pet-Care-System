@@ -6,7 +6,7 @@ if (session_status() == PHP_SESSION_NONE) {
 
 // Check if user is already logged in
 if (isset($_SESSION['user_id'])) {
-    // Redirect to appropriate dashboard
+    // Redirect to appropriate dashboard based on user type
     if ($_SESSION['user_type'] === 'admin') {
         header("Location: admin/dashboard.php");
     } elseif ($_SESSION['user_type'] === 'pet_owner') {
@@ -27,28 +27,32 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $password = $_POST['password'];
     $user_type = $_POST['user_type'];
     
-    // If admin login, use direct query (temporary fix)
-    if ($user_type === "admin") {
-        $sql = "SELECT * FROM admin WHERE (email = '$email' OR username = '$email')";
-        $result = $conn->query($sql);
-        
-        if ($result->num_rows > 0) {
-            $user = $result->fetch_assoc();
-            // For admin, accept any password that matches "admin123"
-            if ($password === "admin123") {
-                $_SESSION['user_id'] = $user['userID'];
-                $_SESSION['username'] = $user['username'];
-                $_SESSION['email'] = $user['email'];
-                $_SESSION['user_type'] = 'admin';
-                header("Location: admin/dashboard.php");
-                exit();
-            }
+    // Validate form data
+    $errors = array();
+    
+    if (empty($email)) {
+        $errors[] = "Email is required";
+    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $errors[] = "Invalid email format";
+    }
+    
+    if (empty($password)) {
+        $errors[] = "Password is required";
+    }
+    
+    // If no errors, proceed with login
+    if (empty($errors)) {
+        // Determine table based on user type
+        $table = "";
+        if ($user_type === "admin") {
+            $table = "admin";
+        } elseif ($user_type === "pet_owner") {
+            $table = "pet_owner";
+        } elseif ($user_type === "pet_sitter") {
+            $table = "pet_sitter";
         }
-        $error = "Invalid admin credentials";
-    } else {
-        // Regular user login (pet owner or pet sitter)
-        $table = ($user_type === "pet_owner") ? "pet_owner" : "pet_sitter";
         
+        // Prepare and execute the query
         $sql = "SELECT * FROM $table WHERE email = ?";
         $stmt = $conn->prepare($sql);
         $stmt->bind_param("s", $email);
@@ -57,23 +61,46 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         
         if ($result->num_rows === 1) {
             $user = $result->fetch_assoc();
+            
+            // Verify password
             if (password_verify($password, $user['password'])) {
-                $_SESSION['user_id'] = $user['userID'];
-                $_SESSION['username'] = $user['username'];
-                $_SESSION['email'] = $user['email'];
-                $_SESSION['user_type'] = $user_type;
-                
-                if ($user_type === "pet_owner") {
-                    header("Location: user/dashboard.php");
+                // Check if pet sitter account is approved
+                if ($user_type === "pet_sitter" && isset($user['approval_status']) && $user['approval_status'] !== 'Approved') {
+                    if ($user['approval_status'] === 'Pending') {
+                        $errors[] = "Your pet sitter account is pending approval by an administrator. Please check back later.";
+                    } elseif ($user['approval_status'] === 'Rejected') {
+                        $errors[] = "Your pet sitter application has been rejected. Please contact the administrator for more information.";
+                    }
                 } else {
-                    header("Location: pet_sitter/dashboard.php");
+                    // Password is correct, start a new session
+                    session_start();
+                    
+                    // Store data in session variables
+                    $_SESSION['user_id'] = $user['userID'];
+                    $_SESSION['username'] = $user['username'];
+                    $_SESSION['email'] = $user['email'];
+                    $_SESSION['user_type'] = $user_type;
+                    
+                    // Redirect to appropriate dashboard
+                    if ($user_type === "admin") {
+                        header("Location: admin/dashboard.php");
+                    } elseif ($user_type === "pet_owner") {
+                        header("Location: user/dashboard.php");
+                    } elseif ($user_type === "pet_sitter") {
+                        header("Location: pet_sitter/dashboard.php");
+                    }
+                    exit();
                 }
-                exit();
+            } else {
+                // Password is not correct
+                $errors[] = "Invalid email or password";
             }
+        } else {
+            // Email not found
+            $errors[] = "Invalid email or password";
         }
-        $error = "Invalid email or password";
-        // Debug
-echo "User found: "; print_r($user); exit;
+        
+        $stmt->close();
     }
     
     $conn->close();
@@ -90,9 +117,13 @@ include_once 'includes/header.php';
             <h2>Login to Your Account</h2>
         </div>
         
-        <?php if (isset($error)): ?>
+        <?php if (!empty($errors)): ?>
             <div class="alert alert-danger">
-                <?php echo $error; ?>
+                <ul class="mb-0">
+                    <?php foreach($errors as $error): ?>
+                        <li><?php echo $error; ?></li>
+                    <?php endforeach; ?>
+                </ul>
             </div>
         <?php endif; ?>
         
@@ -108,7 +139,7 @@ include_once 'includes/header.php';
             
             <div class="mb-3">
                 <label for="email" class="form-label">Email Address</label>
-                <input type="text" class="form-control" id="email" name="email" value="<?php echo isset($email) ? htmlspecialchars($email) : ''; ?>" required>
+                <input type="email" class="form-control" id="email" name="email" value="<?php echo isset($email) ? htmlspecialchars($email) : ''; ?>" required>
             </div>
             
             <div class="mb-3">
@@ -124,10 +155,10 @@ include_once 'includes/header.php';
             <button type="submit" class="btn btn-primary w-100">Login</button>
         </form>
         
-        <!-- <div class="auth-links mt-3">
+        <div class="auth-links mt-3">
             <p>Don't have an account? <a href="register.php">Register</a></p>
             <p><a href="forgot_password.php">Forgot Password?</a></p>
-        </div> -->
+        </div>
     </div>
 </div>
 

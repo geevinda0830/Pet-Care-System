@@ -12,12 +12,12 @@ $min_price = isset($_GET['min_price']) ? (float)$_GET['min_price'] : 0;
 $max_price = isset($_GET['max_price']) ? (float)$_GET['max_price'] : 1000;
 $rating = isset($_GET['rating']) ? (int)$_GET['rating'] : 0;
 
-// Prepare the SQL query base
+// Prepare the SQL query base - only include approved pet sitters
 $sql = "SELECT ps.*, 
         (SELECT AVG(r.rating) FROM reviews r WHERE r.sitterID = ps.userID) as avg_rating,
         (SELECT COUNT(r.reviewID) FROM reviews r WHERE r.sitterID = ps.userID) as review_count
         FROM pet_sitter ps
-        WHERE 1=1";
+        WHERE ps.approval_status = 'Approved'";
 
 // Add conditions based on search parameters
 if (!empty($search_query)) {
@@ -197,7 +197,7 @@ $stmt->close();
 <section class="py-5 bg-primary text-white">
     <div class="container text-center">
         <h2>Become a Pet Sitter</h2>
-        <p class="lead mb-4">Join our community of pet sitters and earn money doing what you love - caring for pets!</p>
+        <p class="lead mb-4">Join our community of pet sitters and earn money doing what you love - caring for pets! All applications are reviewed by our admin team.</p>
         <a href="register.php?type=pet_sitter" class="btn btn-light btn-lg">Sign Up as a Pet Sitter</a>
     </div>
 </section>
