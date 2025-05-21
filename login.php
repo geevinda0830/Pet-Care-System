@@ -64,24 +64,33 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             
             // Verify password
             if (password_verify($password, $user['password'])) {
-                // Password is correct, start a new session
-                session_start();
-                
-                // Store data in session variables
-                $_SESSION['user_id'] = $user['userID'];
-                $_SESSION['username'] = $user['username'];
-                $_SESSION['email'] = $user['email'];
-                $_SESSION['user_type'] = $user_type;
-                
-                // Redirect to appropriate dashboard
-                if ($user_type === "admin") {
-                    header("Location: admin/dashboard.php");
-                } elseif ($user_type === "pet_owner") {
-                    header("Location: user/dashboard.php");
-                } elseif ($user_type === "pet_sitter") {
-                    header("Location: pet_sitter/dashboard.php");
+                // Check if pet sitter account is approved
+                if ($user_type === "pet_sitter" && isset($user['approval_status']) && $user['approval_status'] !== 'Approved') {
+                    if ($user['approval_status'] === 'Pending') {
+                        $errors[] = "Your pet sitter account is pending approval by an administrator. Please check back later.";
+                    } elseif ($user['approval_status'] === 'Rejected') {
+                        $errors[] = "Your pet sitter application has been rejected. Please contact the administrator for more information.";
+                    }
+                } else {
+                    // Password is correct, start a new session
+                    session_start();
+                    
+                    // Store data in session variables
+                    $_SESSION['user_id'] = $user['userID'];
+                    $_SESSION['username'] = $user['username'];
+                    $_SESSION['email'] = $user['email'];
+                    $_SESSION['user_type'] = $user_type;
+                    
+                    // Redirect to appropriate dashboard
+                    if ($user_type === "admin") {
+                        header("Location: admin/dashboard.php");
+                    } elseif ($user_type === "pet_owner") {
+                        header("Location: user/dashboard.php");
+                    } elseif ($user_type === "pet_sitter") {
+                        header("Location: pet_sitter/dashboard.php");
+                    }
+                    exit();
                 }
-                exit();
             } else {
                 // Password is not correct
                 $errors[] = "Invalid email or password";

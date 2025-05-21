@@ -116,8 +116,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         if ($user_type === "pet_owner") {
             $sql = "INSERT INTO pet_owner (username, password, fullName, email, contact, address, gender) VALUES (?, ?, ?, ?, ?, ?, ?)";
         } elseif ($user_type === "pet_sitter") {
-            // For pet sitters, additional fields would be set to default values initially
-            $sql = "INSERT INTO pet_sitter (username, password, fullName, email, contact, address, gender, service, qualifications, experience, specialization, price) VALUES (?, ?, ?, ?, ?, ?, ?, '', '', '', '', 0)";
+            // For pet sitters, include approval_status as 'Pending'
+            $sql = "INSERT INTO pet_sitter (username, password, fullName, email, contact, address, gender, service, qualifications, experience, specialization, price, approval_status) VALUES (?, ?, ?, ?, ?, ?, ?, '', '', '', '', 0, 'Pending')";
         }
         
         $stmt = $conn->prepare($sql);
@@ -125,7 +125,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         
         if ($stmt->execute()) {
             // Registration successful
-            $_SESSION['success_message'] = "Registration successful! You can now login.";
+            if ($user_type === "pet_sitter") {
+                $_SESSION['success_message'] = "Registration successful! Your account is pending approval by an administrator. You'll be notified when your account is approved.";
+            } else {
+                $_SESSION['success_message'] = "Registration successful! You can now login.";
+            }
             header("Location: login.php");
             exit();
         } else {
@@ -163,7 +167,7 @@ include_once 'includes/header.php';
                     <option value="pet_owner" <?php echo ($user_type === 'pet_owner') ? 'selected' : ''; ?>>Pet Owner</option>
                     <option value="pet_sitter" <?php echo ($user_type === 'pet_sitter') ? 'selected' : ''; ?>>Pet Sitter</option>
                 </select>
-                <div class="form-text">Select whether you want to register as a pet owner or a pet sitter.</div>
+                <div class="form-text" id="typeHelp">Select whether you want to register as a pet owner or a pet sitter. Pet sitter accounts require admin approval before they can be used.</div>
             </div>
             
             <div class="row">
@@ -217,6 +221,11 @@ include_once 'includes/header.php';
                 <textarea class="form-control" id="address" name="address" rows="3" required><?php echo htmlspecialchars($address); ?></textarea>
             </div>
             
+            <div id="pet-sitter-notice" class="alert alert-info mb-3" style="display: none;">
+                <i class="fas fa-info-circle me-2"></i>
+                <strong>Note:</strong> Pet sitter accounts require admin approval before they become active. You'll be notified once your account is approved.
+            </div>
+            
             <div class="mb-3 form-check">
                 <input type="checkbox" class="form-check-input" id="terms" name="terms" required>
                 <label class="form-check-label" for="terms">I agree to the <a href="terms.php">Terms and Conditions</a></label>
@@ -232,6 +241,28 @@ include_once 'includes/header.php';
         </div>
     </div>
 </div>
+
+<script>
+    // Show/hide pet sitter notice based on user type selection
+    document.addEventListener('DOMContentLoaded', function() {
+        const userTypeSelect = document.getElementById('user_type');
+        const petSitterNotice = document.getElementById('pet-sitter-notice');
+        
+        // Initial check
+        if (userTypeSelect.value === 'pet_sitter') {
+            petSitterNotice.style.display = 'block';
+        }
+        
+        // Change event
+        userTypeSelect.addEventListener('change', function() {
+            if (this.value === 'pet_sitter') {
+                petSitterNotice.style.display = 'block';
+            } else {
+                petSitterNotice.style.display = 'none';
+            }
+        });
+    });
+</script>
 
 <?php
 // Include footer
