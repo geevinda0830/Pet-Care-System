@@ -82,95 +82,27 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     if (empty($errors)) {
         $table = ($user_type === 'pet_sitter') ? 'pet_sitter' : 'pet_owner';
         
-        // First check if the table exists
-        $table_check = "SHOW TABLES LIKE '$table'";
-        $table_result = $conn->query($table_check);
-        
-        if ($table_result->num_rows == 0) {
-            // Create the table if it doesn't exist
-            if ($user_type === 'pet_sitter') {
-                $create_table = "CREATE TABLE `pet_sitter` (
-                    `userID` int(11) NOT NULL AUTO_INCREMENT,
-                    `username` varchar(50) NOT NULL UNIQUE,
-                    `password` varchar(255) NOT NULL,
-                    `fullName` varchar(100) NOT NULL,
-                    `email` varchar(100) NOT NULL UNIQUE,
-                    `contact` varchar(20) DEFAULT NULL,
-                    `address` text DEFAULT NULL,
-                    `gender` varchar(10) DEFAULT NULL,
-                    `service` varchar(100) DEFAULT NULL,
-                    `qualifications` text DEFAULT NULL,
-                    `experience` text DEFAULT NULL,
-                    `specialization` text DEFAULT NULL,
-                    `price` decimal(10,2) DEFAULT NULL,
-                    `image` varchar(255) DEFAULT NULL,
-                    `latitude` decimal(10,8) DEFAULT NULL,
-                    `longitude` decimal(11,8) DEFAULT NULL,
-                    `approval_status` varchar(20) DEFAULT 'Pending',
-                    `status` varchar(20) DEFAULT 'Active',
-                    `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-                    PRIMARY KEY (`userID`)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
-            } else {
-                $create_table = "CREATE TABLE `pet_owner` (
-                    `userID` int(11) NOT NULL AUTO_INCREMENT,
-                    `username` varchar(50) NOT NULL UNIQUE,
-                    `password` varchar(255) NOT NULL,
-                    `fullName` varchar(100) NOT NULL,
-                    `email` varchar(100) NOT NULL UNIQUE,
-                    `contact` varchar(20) DEFAULT NULL,
-                    `address` text DEFAULT NULL,
-                    `gender` varchar(10) DEFAULT NULL,
-                    `image` varchar(255) DEFAULT NULL,
-                    `status` varchar(20) DEFAULT 'Active',
-                    `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-                    PRIMARY KEY (`userID`)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+        // Check for existing username/email
+        $check_sql = "SELECT * FROM $table WHERE username = ? OR email = ?";
+        $check_stmt = $conn->prepare($check_sql);
+        if (!$check_stmt) {
+            $errors[] = "Database error: " . $conn->error;
+        } else {
+            $check_stmt->bind_param("ss", $username, $email);
+            $check_stmt->execute();
+            $check_result = $check_stmt->get_result();
+            
+            if ($check_result->num_rows > 0) {
+                $existing_user = $check_result->fetch_assoc();
+                if ($existing_user['username'] === $username) {
+                    $errors[] = "Username already exists";
+                }
+                if ($existing_user['email'] === $email) {
+                    $errors[] = "Email already exists";
+                }
             }
             
-            if (!$conn->query($create_table)) {
-                $errors[] = "Database setup error. Please contact administrator.";
-                error_log("Table creation failed: " . $conn->error);
-            }
-        } else {
-            // Table exists, check if approval_status column exists for pet_sitter
-            if ($user_type === 'pet_sitter') {
-                $column_check = "SHOW COLUMNS FROM pet_sitter LIKE 'approval_status'";
-                $column_result = $conn->query($column_check);
-                
-                if ($column_result->num_rows == 0) {
-                    // Add approval_status column
-                    $add_column = "ALTER TABLE pet_sitter ADD COLUMN approval_status varchar(20) DEFAULT 'Pending'";
-                    if (!$conn->query($add_column)) {
-                        error_log("Column addition failed: " . $conn->error);
-                    }
-                }
-            }
-        }
-        
-        // Check for existing username/email
-        if (empty($errors)) {
-            $check_sql = "SELECT * FROM $table WHERE username = ? OR email = ?";
-            $check_stmt = $conn->prepare($check_sql);
-            if (!$check_stmt) {
-                $errors[] = "Database error: " . $conn->error;
-            } else {
-                $check_stmt->bind_param("ss", $username, $email);
-                $check_stmt->execute();
-                $check_result = $check_stmt->get_result();
-                
-                if ($check_result->num_rows > 0) {
-                    $existing_user = $check_result->fetch_assoc();
-                    if ($existing_user['username'] === $username) {
-                        $errors[] = "Username already exists";
-                    }
-                    if ($existing_user['email'] === $email) {
-                        $errors[] = "Email already exists";
-                    }
-                }
-                
-                $check_stmt->close();
-            }
+            $check_stmt->close();
         }
     }
     
@@ -180,19 +112,22 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         
         try {
             if ($user_type === 'pet_sitter') {
-                // Insert into pet_sitter table with pending approval
-                $insert_sql = "INSERT INTO pet_sitter (username, password, fullName, email, contact, address, gender, approval_status, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'Pending', 'Active')";
+                // Insert into pet_sitter table with all fields
+                $insert_sql = "INSERT INTO pet_sitter (username, password, fullName, email, contact, address, gender, service, qualifications, experience, specialization, price, latitude, longitude, approval_status) VALUES (?, ?, ?, ?, ?, ?, ?, '', '', '', '', 0.00, NULL, NULL, 'Pending')";
+                $insert_stmt = $conn->prepare($insert_sql);
+                if (!$insert_stmt) {
+                    throw new Exception("Prepare failed: " . $conn->error);
+                }
+                $insert_stmt->bind_param("sssssss", $username, $hashed_password, $fullName, $email, $contact, $address, $gender);
             } else {
                 // Insert into pet_owner table
-                $insert_sql = "INSERT INTO pet_owner (username, password, fullName, email, contact, address, gender, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'Active')";
+                $insert_sql = "INSERT INTO pet_owner (username, password, fullName, email, contact, address, gender) VALUES (?, ?, ?, ?, ?, ?, ?)";
+                $insert_stmt = $conn->prepare($insert_sql);
+                if (!$insert_stmt) {
+                    throw new Exception("Prepare failed: " . $conn->error);
+                }
+                $insert_stmt->bind_param("sssssss", $username, $hashed_password, $fullName, $email, $contact, $address, $gender);
             }
-            
-            $insert_stmt = $conn->prepare($insert_sql);
-            if (!$insert_stmt) {
-                throw new Exception("Prepare failed: " . $conn->error);
-            }
-            
-            $insert_stmt->bind_param("sssssss", $username, $hashed_password, $fullName, $email, $contact, $address, $gender);
             
             if ($insert_stmt->execute()) {
                 if ($user_type === 'pet_sitter') {
