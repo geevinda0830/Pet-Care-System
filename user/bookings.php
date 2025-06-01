@@ -107,151 +107,473 @@ $stmt->close();
 include_once '../includes/header.php';
 ?>
 
-<!-- Page Header -->
-<div class="container-fluid bg-light py-4">
+<!-- Modern Page Header -->
+<section class="page-header-modern">
     <div class="container">
         <div class="row align-items-center">
-            <div class="col-md-8">
-                <h1 class="display-5 mb-2">My Bookings</h1>
-                <p class="lead">View and manage your pet sitting bookings.</p>
+            <div class="col-lg-6">
+                <div class="page-header-content">
+                    <span class="page-badge">📅 My Bookings</span>
+                    <h1 class="page-title">Pet Sitting <span class="text-gradient">Bookings</span></h1>
+                    <p class="page-subtitle">Manage and track your pet sitting appointments with trusted sitters</p>
+                </div>
             </div>
-            <div class="col-md-4 text-md-end">
-                <a href="../pet_sitters.php" class="btn btn-primary">
-                    <i class="fas fa-plus me-1"></i> New Booking
-                </a>
-                <a href="dashboard.php" class="btn btn-outline-secondary ms-2">
-                    <i class="fas fa-arrow-left me-1"></i> Back to Dashboard
-                </a>
+            <div class="col-lg-6">
+                <div class="page-actions">
+                    <a href="../pet_sitters.php" class="btn btn-primary-gradient">
+                        <i class="fas fa-plus me-2"></i> New Booking
+                    </a>
+                    <a href="dashboard.php" class="btn btn-outline-light">
+                        <i class="fas fa-arrow-left me-2"></i> Dashboard
+                    </a>
+                </div>
             </div>
         </div>
     </div>
-</div>
+</section>
 
-<!-- Booking Management -->
-<div class="container py-5">
-    <!-- Filtering and Sorting Options -->
-    <div class="card mb-4">
-        <div class="card-body">
-            <form action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>" method="get" class="row g-3">
-                <div class="col-md-5">
-                    <label for="status" class="form-label">Filter by Status</label>
-                    <select class="form-select" id="status" name="status">
-                        <option value="" <?php echo empty($status_filter) ? 'selected' : ''; ?>>All Bookings</option>
-                        <option value="Pending" <?php echo ($status_filter === 'Pending') ? 'selected' : ''; ?>>Pending</option>
-                        <option value="Confirmed" <?php echo ($status_filter === 'Confirmed') ? 'selected' : ''; ?>>Confirmed</option>
-                        <option value="Completed" <?php echo ($status_filter === 'Completed') ? 'selected' : ''; ?>>Completed</option>
-                        <option value="Cancelled" <?php echo ($status_filter === 'Cancelled') ? 'selected' : ''; ?>>Cancelled</option>
-                    </select>
-                </div>
-                
-                <div class="col-md-5">
-                    <label for="sort_by" class="form-label">Sort By</label>
-                    <select class="form-select" id="sort_by" name="sort_by">
-                        <option value="newest" <?php echo ($sort_by === 'newest') ? 'selected' : ''; ?>>Newest First</option>
-                        <option value="oldest" <?php echo ($sort_by === 'oldest') ? 'selected' : ''; ?>>Oldest First</option>
-                        <option value="upcoming" <?php echo ($sort_by === 'upcoming') ? 'selected' : ''; ?>>Upcoming Dates</option>
-                        <option value="completed" <?php echo ($sort_by === 'completed') ? 'selected' : ''; ?>>Recently Completed</option>
-                    </select>
-                </div>
-                
-                <div class="col-md-2 d-flex align-items-end">
-                    <button type="submit" class="btn btn-primary w-100">Apply</button>
+<!-- Modern Filters Section -->
+<section class="filters-section-modern">
+    <div class="container">
+        <div class="filter-card-modern">
+            <form action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>" method="get" class="filter-form-modern">
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-5">
+                        <label class="filter-label-modern">Filter by Status</label>
+                        <select class="form-select modern-select" name="status">
+                            <option value="" <?php echo empty($status_filter) ? 'selected' : ''; ?>>All Bookings</option>
+                            <option value="Pending" <?php echo ($status_filter === 'Pending') ? 'selected' : ''; ?>>Pending</option>
+                            <option value="Confirmed" <?php echo ($status_filter === 'Confirmed') ? 'selected' : ''; ?>>Confirmed</option>
+                            <option value="Completed" <?php echo ($status_filter === 'Completed') ? 'selected' : ''; ?>>Completed</option>
+                            <option value="Cancelled" <?php echo ($status_filter === 'Cancelled') ? 'selected' : ''; ?>>Cancelled</option>
+                        </select>
+                    </div>
+                    
+                    <div class="col-md-5">
+                        <label class="filter-label-modern">Sort By</label>
+                        <select class="form-select modern-select" name="sort_by">
+                            <option value="newest" <?php echo ($sort_by === 'newest') ? 'selected' : ''; ?>>Newest First</option>
+                            <option value="oldest" <?php echo ($sort_by === 'oldest') ? 'selected' : ''; ?>>Oldest First</option>
+                            <option value="upcoming" <?php echo ($sort_by === 'upcoming') ? 'selected' : ''; ?>>Upcoming Dates</option>
+                            <option value="completed" <?php echo ($sort_by === 'completed') ? 'selected' : ''; ?>>Recently Completed</option>
+                        </select>
+                    </div>
+                    
+                    <div class="col-md-2">
+                        <button type="submit" class="btn btn-primary-gradient w-100">
+                            <i class="fas fa-filter me-1"></i> Apply
+                        </button>
+                    </div>
                 </div>
             </form>
         </div>
     </div>
-    
-    <!-- Bookings List -->
-    <?php if (empty($bookings)): ?>
-        <div class="alert alert-info">
-            <h4 class="alert-heading">No Bookings Found</h4>
-            <p>You don't have any bookings<?php echo !empty($status_filter) ? " with status '$status_filter'" : ""; ?>.</p>
-            <hr>
-            <p class="mb-0">Click the "New Booking" button to book a pet sitter.</p>
-        </div>
-    <?php else: ?>
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">Your Bookings (<?php echo count($bookings); ?>)</h5>
-            </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-hover mb-0">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Booking #</th>
-                                <th>Pet</th>
-                                <th>Pet Sitter</th>
-                                <th>Service</th>
-                                <th>Dates</th>
-                                <th>Status</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($bookings as $booking): ?>
-                                <tr>
-                                    <td><?php echo $booking['bookingID']; ?></td>
-                                    <td><?php echo htmlspecialchars($booking['petName']); ?></td>
-                                    <td><?php echo htmlspecialchars($booking['sitterName']); ?></td>
-                                    <td><?php echo htmlspecialchars($booking['service']); ?></td>
-                                    <td>
-                                        <small>
-                                            From: <?php echo date('M d, Y', strtotime($booking['checkInDate'])); ?> at 
-                                            <?php echo date('h:i A', strtotime($booking['checkInTime'])); ?><br>
-                                            To: <?php echo date('M d, Y', strtotime($booking['checkOutDate'])); ?> at 
-                                            <?php echo date('h:i A', strtotime($booking['checkOutTime'])); ?>
-                                        </small>
-                                    </td>
-                                    <td>
-                                        <?php
-                                        $status_class = '';
-                                        switch ($booking['status']) {
-                                            case 'Pending':
-                                                $status_class = 'bg-warning';
-                                                break;
-                                            case 'Confirmed':
-                                                $status_class = 'bg-success';
-                                                break;
-                                            case 'Cancelled':
-                                                $status_class = 'bg-danger';
-                                                break;
-                                            case 'Completed':
-                                                $status_class = 'bg-info';
-                                                break;
-                                        }
-                                        ?>
-                                        <span class="badge <?php echo $status_class; ?>"><?php echo $booking['status']; ?></span>
-                                    </td>
-                                    <td>
-                                        <a href="booking_details.php?id=<?php echo $booking['bookingID']; ?>" class="btn btn-sm btn-outline-primary" title="View Details">
-                                            <i class="fas fa-eye"></i>
-                                        </a>
-                                        
-                                        <?php if ($booking['status'] === 'Pending' || $booking['status'] === 'Confirmed'): ?>
-                                            <form action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>" method="post" class="d-inline" onsubmit="return confirm('Are you sure you want to cancel this booking?');">
-                                                <input type="hidden" name="booking_id" value="<?php echo $booking['bookingID']; ?>">
-                                                <button type="submit" name="cancel_booking" class="btn btn-sm btn-outline-danger" title="Cancel Booking">
-                                                    <i class="fas fa-times"></i>
-                                                </button>
-                                            </form>
-                                        <?php endif; ?>
-                                        
-                                        <?php if ($booking['status'] === 'Completed'): ?>
-                                            <a href="add_review.php?sitter_id=<?php echo $booking['sitterID']; ?>&booking_id=<?php echo $booking['bookingID']; ?>" class="btn btn-sm btn-outline-success" title="Leave Review">
-                                                <i class="fas fa-star"></i>
-                                            </a>
-                                        <?php endif; ?>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
+</section>
+
+<!-- Modern Bookings Content -->
+<section class="content-section-modern">
+    <div class="container">
+        <?php if (empty($bookings)): ?>
+            <div class="empty-state-modern">
+                <div class="empty-icon">
+                    <i class="fas fa-calendar-times"></i>
                 </div>
+                <h4>No Bookings Found</h4>
+                <p>You don't have any bookings<?php echo !empty($status_filter) ? " with status '$status_filter'" : ""; ?>.</p>
+                <a href="../pet_sitters.php" class="btn btn-primary-gradient">
+                    <i class="fas fa-search me-2"></i> Find Pet Sitters
+                </a>
             </div>
-        </div>
-    <?php endif; ?>
-</div>
+        <?php else: ?>
+            <div class="content-header">
+                <h3>Your Bookings <span class="count-badge"><?php echo count($bookings); ?> total</span></h3>
+            </div>
+            
+            <div class="bookings-grid">
+                <?php foreach ($bookings as $booking): ?>
+                    <div class="booking-card-modern">
+                        <div class="booking-status-indicator status-<?php echo strtolower($booking['status']); ?>"></div>
+                        
+                        <div class="booking-header">
+                            <div class="booking-info">
+                                <h5 class="booking-title">Booking #<?php echo $booking['bookingID']; ?></h5>
+                                <span class="booking-status-badge status-<?php echo strtolower($booking['status']); ?>">
+                                    <?php echo $booking['status']; ?>
+                                </span>
+                            </div>
+                        </div>
+                        
+                        <div class="booking-details">
+                            <div class="detail-item">
+                                <div class="detail-icon">
+                                    <i class="fas fa-paw"></i>
+                                </div>
+                                <div class="detail-content">
+                                    <span class="detail-label">Pet</span>
+                                    <span class="detail-value"><?php echo htmlspecialchars($booking['petName']); ?></span>
+                                </div>
+                            </div>
+                            
+                            <div class="detail-item">
+                                <div class="detail-icon">
+                                    <i class="fas fa-user-friends"></i>
+                                </div>
+                                <div class="detail-content">
+                                    <span class="detail-label">Pet Sitter</span>
+                                    <span class="detail-value"><?php echo htmlspecialchars($booking['sitterName']); ?></span>
+                                </div>
+                            </div>
+                            
+                            <div class="detail-item">
+                                <div class="detail-icon">
+                                    <i class="fas fa-concierge-bell"></i>
+                                </div>
+                                <div class="detail-content">
+                                    <span class="detail-label">Service</span>
+                                    <span class="detail-value"><?php echo htmlspecialchars($booking['service']); ?></span>
+                                </div>
+                            </div>
+                            
+                            <div class="detail-item">
+                                <div class="detail-icon">
+                                    <i class="fas fa-calendar-alt"></i>
+                                </div>
+                                <div class="detail-content">
+                                    <span class="detail-label">Duration</span>
+                                    <span class="detail-value">
+                                        <?php echo date('M d, Y', strtotime($booking['checkInDate'])); ?> - 
+                                        <?php echo date('M d, Y', strtotime($booking['checkOutDate'])); ?>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="booking-actions">
+                            <a href="booking_details.php?id=<?php echo $booking['bookingID']; ?>" class="btn btn-outline-primary btn-sm">
+                                <i class="fas fa-eye me-1"></i> View Details
+                            </a>
+                            
+                            <?php if ($booking['status'] === 'Pending' || $booking['status'] === 'Confirmed'): ?>
+                                <form action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>" method="post" class="d-inline" onsubmit="return confirm('Are you sure you want to cancel this booking?');">
+                                    <input type="hidden" name="booking_id" value="<?php echo $booking['bookingID']; ?>">
+                                    <button type="submit" name="cancel_booking" class="btn btn-outline-danger btn-sm">
+                                        <i class="fas fa-times me-1"></i> Cancel
+                                    </button>
+                                </form>
+                            <?php endif; ?>
+                            
+                            <?php if ($booking['status'] === 'Completed'): ?>
+                                <a href="add_review.php?sitter_id=<?php echo $booking['sitterID']; ?>&booking_id=<?php echo $booking['bookingID']; ?>" class="btn btn-primary-gradient btn-sm">
+                                    <i class="fas fa-star me-1"></i> Review
+                                </a>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+    </div>
+</section>
+
+<style>
+.page-header-modern {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 80px 0;
+    position: relative;
+    overflow: hidden;
+}
+
+.page-header-modern::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="20" cy="20" r="1" fill="rgba(255,255,255,0.1)"/><circle cx="80" cy="40" r="0.5" fill="rgba(255,255,255,0.1)"/><circle cx="40" cy="80" r="1.5" fill="rgba(255,255,255,0.1)"/></svg>');
+    animation: float 20s infinite linear;
+}
+
+.page-header-content {
+    position: relative;
+    z-index: 2;
+}
+
+.page-badge {
+    background: rgba(255, 255, 255, 0.2);
+    padding: 8px 16px;
+    border-radius: 50px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-bottom: 16px;
+    display: inline-block;
+    backdrop-filter: blur(10px);
+}
+
+.page-title {
+    font-size: 3.5rem;
+    font-weight: 800;
+    line-height: 1.2;
+    margin-bottom: 16px;
+}
+
+.page-subtitle {
+    font-size: 1.2rem;
+    opacity: 0.9;
+    margin-bottom: 0;
+}
+
+.page-actions {
+    text-align: right;
+    position: relative;
+    z-index: 2;
+}
+
+.page-actions .btn {
+    margin-left: 12px;
+}
+
+.filters-section-modern {
+    padding: 40px 0;
+    background: #f8f9ff;
+}
+
+.filter-card-modern {
+    background: white;
+    border-radius: 20px;
+    padding: 32px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+    border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.filter-label-modern {
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 8px;
+    display: block;
+    font-size: 0.9rem;
+}
+
+.modern-select {
+    padding: 12px 16px;
+    border: 2px solid #e5e7eb;
+    border-radius: 12px;
+    transition: all 0.3s ease;
+    background: white;
+}
+
+.modern-select:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.content-section-modern {
+    padding: 80px 0;
+    background: white;
+}
+
+.empty-state-modern {
+    text-align: center;
+    padding: 80px 40px;
+    background: #f8f9ff;
+    border-radius: 20px;
+    border: 2px dashed #d1d5db;
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+.empty-icon {
+    font-size: 4rem;
+    color: #9ca3af;
+    margin-bottom: 24px;
+}
+
+.empty-state-modern h4 {
+    color: #374151;
+    margin-bottom: 16px;
+    font-weight: 600;
+}
+
+.empty-state-modern p {
+    color: #6b7280;
+    margin-bottom: 32px;
+}
+
+.content-header {
+    margin-bottom: 40px;
+}
+
+.content-header h3 {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0;
+}
+
+.count-badge {
+    background: linear-gradient(135deg, #f1f5f9, #e2e8f0);
+    color: #64748b;
+    padding: 4px 12px;
+    border-radius: 50px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    margin-left: 12px;
+}
+
+.bookings-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+    gap: 24px;
+}
+
+.booking-card-modern {
+    background: white;
+    border-radius: 20px;
+    padding: 24px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.booking-card-modern:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+}
+
+.booking-status-indicator {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+}
+
+.booking-status-indicator.status-pending { background: #f59e0b; }
+.booking-status-indicator.status-confirmed { background: #10b981; }
+.booking-status-indicator.status-completed { background: #3b82f6; }
+.booking-status-indicator.status-cancelled { background: #ef4444; }
+
+.booking-header {
+    margin-bottom: 20px;
+}
+
+.booking-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.booking-title {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #1e293b;
+    margin: 0;
+}
+
+.booking-status-badge {
+    padding: 6px 12px;
+    border-radius: 50px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.booking-status-badge.status-pending { background: #fef3c7; color: #92400e; }
+.booking-status-badge.status-confirmed { background: #dcfce7; color: #166534; }
+.booking-status-badge.status-completed { background: #dbeafe; color: #1e40af; }
+.booking-status-badge.status-cancelled { background: #fee2e2; color: #991b1b; }
+
+.booking-details {
+    margin-bottom: 24px;
+}
+
+.detail-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.detail-item:last-child {
+    margin-bottom: 0;
+}
+
+.detail-icon {
+    width: 36px;
+    height: 36px;
+    background: linear-gradient(135deg, #f1f5f9, #e2e8f0);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #667eea;
+    flex-shrink: 0;
+}
+
+.detail-content {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.detail-label {
+    font-size: 0.8rem;
+    color: #9ca3af;
+    font-weight: 500;
+}
+
+.detail-value {
+    color: #374151;
+    font-weight: 500;
+}
+
+.booking-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.booking-actions .btn {
+    flex: 1;
+    min-width: 120px;
+}
+
+@media (max-width: 768px) {
+    .page-title {
+        font-size: 2.5rem;
+    }
+    
+    .page-actions {
+        text-align: left;
+        margin-top: 24px;
+    }
+    
+    .page-actions .btn {
+        margin-left: 0;
+        margin-right: 12px;
+        margin-bottom: 8px;
+    }
+    
+    .bookings-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .filter-card-modern {
+        padding: 24px;
+    }
+    
+    .booking-actions {
+        flex-direction: column;
+    }
+    
+    .booking-actions .btn {
+        min-width: auto;
+    }
+}
+</style>
 
 <?php
 // Include footer
