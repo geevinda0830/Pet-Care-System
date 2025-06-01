@@ -105,285 +105,854 @@ $upcoming_bookings_stmt->close();
 include_once '../includes/header.php';
 ?>
 
-<!-- Dashboard Header -->
-<div class="container-fluid bg-light py-4">
+<!-- Modern Dashboard Header -->
+<section class="dashboard-header-section">
     <div class="container">
         <div class="row align-items-center">
-            <div class="col-md-8">
-                <h1 class="display-5 mb-2">Welcome, <?php echo htmlspecialchars($user['fullName']); ?>!</h1>
-                <p class="lead">Manage your pet sitting services and bookings from your dashboard.</p>
+            <div class="col-lg-8">
+                <div class="dashboard-welcome">
+                    <span class="welcome-badge">🎉 Welcome Back!</span>
+                    <h1 class="dashboard-title">Hello, <span class="text-gradient"><?php echo htmlspecialchars($user['fullName']); ?></span></h1>
+                    <p class="dashboard-subtitle">Manage your pet sitting services and grow your business with our platform.</p>
+                </div>
             </div>
-            <div class="col-md-4 text-md-end">
-                <a href="profile.php" class="btn btn-primary">
-                    <i class="fas fa-user-edit me-1"></i> Edit Profile
+            <div class="col-lg-4 text-lg-end">
+                <a href="profile.php" class="btn btn-primary-gradient btn-lg">
+                    <i class="fas fa-user-edit me-2"></i> Edit Profile
                 </a>
             </div>
         </div>
     </div>
-</div>
+</section>
+
+<!-- Modern Statistics Cards -->
+<section class="dashboard-stats-section">
+    <div class="container">
+        <div class="row g-4">
+            <div class="col-lg-3 col-md-6">
+                <div class="stat-card-modern primary">
+                    <div class="stat-icon">
+                        <i class="fas fa-calendar-check"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3><?php echo $active_bookings_count; ?></h3>
+                        <p>Active Bookings</p>
+                        <div class="stat-trend">
+                            <i class="fas fa-arrow-up"></i>
+                            <span>+12% this month</span>
+                        </div>
+                    </div>
+                    <a href="bookings.php?status=active" class="stat-link"></a>
+                </div>
+            </div>
+            
+            <div class="col-lg-3 col-md-6">
+                <div class="stat-card-modern success">
+                    <div class="stat-icon">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3><?php echo $completed_bookings_count; ?></h3>
+                        <p>Completed Jobs</p>
+                        <div class="stat-trend">
+                            <i class="fas fa-arrow-up"></i>
+                            <span>+8% this month</span>
+                        </div>
+                    </div>
+                    <a href="bookings.php?status=completed" class="stat-link"></a>
+                </div>
+            </div>
+            
+            <div class="col-lg-3 col-md-6">
+                <div class="stat-card-modern warning">
+                    <div class="stat-icon">
+                        <i class="fas fa-star"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3><?php echo $avg_rating > 0 ? $avg_rating : 'N/A'; ?></h3>
+                        <p>Average Rating</p>
+                        <div class="stat-trend">
+                            <span><?php echo $review_count; ?> reviews</span>
+                        </div>
+                    </div>
+                    <a href="reviews.php" class="stat-link"></a>
+                </div>
+            </div>
+            
+            <div class="col-lg-3 col-md-6">
+                <div class="stat-card-modern info">
+                    <div class="stat-icon">
+                        <i class="fas fa-clipboard-list"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3><?php echo $services_count; ?></h3>
+                        <p>Services Offered</p>
+                        <div class="stat-trend">
+                            <i class="fas fa-plus"></i>
+                            <span>Add more</span>
+                        </div>
+                    </div>
+                    <a href="services.php" class="stat-link"></a>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
 
 <!-- Dashboard Content -->
-<div class="container py-5">
-    <!-- Statistics Cards -->
-    <div class="row mb-5">
-        <div class="col-md-3">
-            <div class="dashboard-stat bg-primary text-white">
-                <div class="icon">
-                    <i class="fas fa-calendar-check"></i>
-                </div>
-                <h3><?php echo $active_bookings_count; ?></h3>
-                <p>Active Bookings</p>
-                <a href="bookings.php?status=active" class="stretched-link"></a>
-            </div>
-        </div>
-        
-        <div class="col-md-3">
-            <div class="dashboard-stat bg-success text-white">
-                <div class="icon">
-                    <i class="fas fa-check-circle"></i>
-                </div>
-                <h3><?php echo $completed_bookings_count; ?></h3>
-                <p>Completed Jobs</p>
-                <a href="bookings.php?status=completed" class="stretched-link"></a>
-            </div>
-        </div>
-        
-        <div class="col-md-3">
-            <div class="dashboard-stat bg-warning text-white">
-                <div class="icon">
-                    <i class="fas fa-star"></i>
-                </div>
-                <h3><?php echo $avg_rating > 0 ? $avg_rating : 'N/A'; ?></h3>
-                <p>Average Rating (<?php echo $review_count; ?> reviews)</p>
-                <a href="reviews.php" class="stretched-link"></a>
-            </div>
-        </div>
-        
-        <div class="col-md-3">
-            <div class="dashboard-stat bg-info text-white">
-                <div class="icon">
-                    <i class="fas fa-clipboard-list"></i>
-                </div>
-                <h3><?php echo $services_count; ?></h3>
-                <p>Services Offered</p>
-                <a href="services.php" class="stretched-link"></a>
-            </div>
-        </div>
-    </div>
-    
-    <div class="row">
-        <!-- Upcoming Bookings -->
-        <div class="col-lg-6 mb-4">
-            <div class="card h-100">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">Upcoming Bookings</h5>
-                    <a href="bookings.php" class="btn btn-sm btn-outline-primary">View All</a>
-                </div>
-                <div class="card-body">
-                    <?php if (empty($upcoming_bookings)): ?>
-                        <p class="text-muted">No upcoming bookings found.</p>
-                    <?php else: ?>
-                        <?php foreach ($upcoming_bookings as $booking): ?>
-                            <div class="booking-card mb-3">
-                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <h6><?php echo htmlspecialchars($booking['petName']); ?> (<?php echo htmlspecialchars($booking['petType']); ?>)</h6>
-                                    <span class="badge bg-success">Confirmed</span>
+<section class="dashboard-content-section">
+    <div class="container">
+        <div class="row g-4">
+            <!-- Upcoming Bookings -->
+            <div class="col-lg-6">
+                <div class="dashboard-card">
+                    <div class="card-header-modern">
+                        <h5 class="card-title-modern">
+                            <i class="fas fa-calendar-alt me-2"></i>
+                            Upcoming Bookings
+                        </h5>
+                        <a href="bookings.php" class="btn btn-outline-primary btn-sm">View All</a>
+                    </div>
+                    <div class="card-body-modern">
+                        <?php if (empty($upcoming_bookings)): ?>
+                            <div class="empty-state">
+                                <i class="fas fa-calendar-plus"></i>
+                                <h6>No upcoming bookings</h6>
+                                <p>Your next confirmed bookings will appear here.</p>
+                            </div>
+                        <?php else: ?>
+                            <?php foreach ($upcoming_bookings as $booking): ?>
+                                <div class="booking-item-modern">
+                                    <div class="booking-avatar">
+                                        <div class="pet-initial"><?php echo strtoupper(substr($booking['petName'], 0, 1)); ?></div>
+                                    </div>
+                                    <div class="booking-details">
+                                        <h6><?php echo htmlspecialchars($booking['petName']); ?></h6>
+                                        <p class="booking-owner"><?php echo htmlspecialchars($booking['ownerName']); ?></p>
+                                        <div class="booking-date">
+                                            <i class="fas fa-clock me-1"></i>
+                                            <?php echo date('M d', strtotime($booking['checkInDate'])); ?> at 
+                                            <?php echo date('h:i A', strtotime($booking['checkInTime'])); ?>
+                                        </div>
+                                    </div>
+                                    <div class="booking-status">
+                                        <span class="status-badge confirmed">Confirmed</span>
+                                        <div class="booking-countdown">
+                                            <?php 
+                                            $now = new DateTime();
+                                            $checkIn = new DateTime($booking['checkInDate'] . ' ' . $booking['checkInTime']);
+                                            $interval = $now->diff($checkIn);
+                                            
+                                            if ($interval->days == 0) {
+                                                echo 'Today';
+                                            } elseif ($interval->days == 1) {
+                                                echo 'Tomorrow';
+                                            } else {
+                                                echo 'In ' . $interval->days . ' days';
+                                            }
+                                            ?>
+                                        </div>
+                                    </div>
+                                    <a href="booking_details.php?id=<?php echo $booking['bookingID']; ?>" class="booking-link"></a>
                                 </div>
-                                <p class="mb-1 small">
-                                    <i class="fas fa-user me-2"></i>
-                                    Owner: <?php echo htmlspecialchars($booking['ownerName']); ?>
-                                </p>
-                                <p class="mb-1 small">
-                                    <i class="fas fa-calendar me-2"></i>
-                                    <?php echo date('M d, Y', strtotime($booking['checkInDate'])); ?> at 
-                                    <?php echo date('h:i A', strtotime($booking['checkInTime'])); ?> - 
-                                    <?php echo date('M d, Y', strtotime($booking['checkOutDate'])); ?> at 
-                                    <?php echo date('h:i A', strtotime($booking['checkOutTime'])); ?>
-                                </p>
-                                <div class="d-flex justify-content-between align-items-center mt-2">
-                                    <small class="text-muted">
-                                        <?php 
-                                        $now = new DateTime();
-                                        $checkIn = new DateTime($booking['checkInDate'] . ' ' . $booking['checkInTime']);
-                                        $interval = $now->diff($checkIn);
-                                        
-                                        if ($interval->days == 0) {
-                                            echo 'Today';
-                                        } elseif ($interval->days == 1) {
-                                            echo 'Tomorrow';
-                                        } else {
-                                            echo 'In ' . $interval->days . ' days';
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Recent Activity -->
+            <div class="col-lg-6">
+                <div class="dashboard-card">
+                    <div class="card-header-modern">
+                        <h5 class="card-title-modern">
+                            <i class="fas fa-history me-2"></i>
+                            Recent Activity
+                        </h5>
+                        <a href="bookings.php" class="btn btn-outline-primary btn-sm">View All</a>
+                    </div>
+                    <div class="card-body-modern">
+                        <?php if (empty($recent_bookings)): ?>
+                            <div class="empty-state">
+                                <i class="fas fa-history"></i>
+                                <h6>No recent activity</h6>
+                                <p>Your booking history will appear here.</p>
+                            </div>
+                        <?php else: ?>
+                            <?php foreach ($recent_bookings as $booking): ?>
+                                <div class="activity-item-modern">
+                                    <div class="activity-icon <?php echo strtolower($booking['status']); ?>">
+                                        <?php
+                                        switch ($booking['status']) {
+                                            case 'Pending':
+                                                echo '<i class="fas fa-clock"></i>';
+                                                break;
+                                            case 'Confirmed':
+                                                echo '<i class="fas fa-check"></i>';
+                                                break;
+                                            case 'Completed':
+                                                echo '<i class="fas fa-check-circle"></i>';
+                                                break;
+                                            case 'Cancelled':
+                                                echo '<i class="fas fa-times"></i>';
+                                                break;
                                         }
                                         ?>
-                                    </small>
-                                    <a href="booking_details.php?id=<?php echo $booking['bookingID']; ?>" class="btn btn-sm btn-outline-secondary">View Details</a>
+                                    </div>
+                                    <div class="activity-content">
+                                        <h6>Booking for <?php echo htmlspecialchars($booking['petName']); ?></h6>
+                                        <p>Owner: <?php echo htmlspecialchars($booking['ownerName']); ?></p>
+                                        <div class="activity-meta">
+                                            <span class="status-badge <?php echo strtolower($booking['status']); ?>">
+                                                <?php echo $booking['status']; ?>
+                                            </span>
+                                            <span class="activity-date">
+                                                <?php echo date('M d, Y', strtotime($booking['created_at'])); ?>
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <a href="booking_details.php?id=<?php echo $booking['bookingID']; ?>" class="activity-link"></a>
                                 </div>
-                            </div>
-                            <?php if ($booking !== end($upcoming_bookings)): ?>
-                                <hr>
-                            <?php endif; ?>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </div>
                 </div>
             </div>
         </div>
         
-        <!-- Recent Bookings -->
-        <div class="col-lg-6 mb-4">
-            <div class="card h-100">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">Recent Bookings</h5>
-                    <a href="bookings.php" class="btn btn-sm btn-outline-primary">View All</a>
-                </div>
-                <div class="card-body">
-                    <?php if (empty($recent_bookings)): ?>
-                        <p class="text-muted">No recent bookings found.</p>
-                    <?php else: ?>
-                        <?php foreach ($recent_bookings as $booking): ?>
-                            <div class="booking-card mb-3">
-                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <h6><?php echo htmlspecialchars($booking['petName']); ?> (<?php echo htmlspecialchars($booking['petType']); ?>)</h6>
-                                    <?php
-                                    $status_class = '';
-                                    switch ($booking['status']) {
-                                        case 'Pending':
-                                            $status_class = 'bg-warning';
-                                            break;
-                                        case 'Confirmed':
-                                            $status_class = 'bg-success';
-                                            break;
-                                        case 'Cancelled':
-                                            $status_class = 'bg-danger';
-                                            break;
-                                        case 'Completed':
-                                            $status_class = 'bg-info';
-                                            break;
-                                    }
-                                    ?>
-                                    <span class="badge <?php echo $status_class; ?>"><?php echo $booking['status']; ?></span>
+        <!-- Profile Completion -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="profile-completion-card">
+                    <?php
+                    // Calculate profile completion percentage
+                    $total_fields = 9;
+                    $filled_fields = 0;
+                    
+                    if (!empty($user['fullName'])) $filled_fields++;
+                    if (!empty($user['email'])) $filled_fields++;
+                    if (!empty($user['contact'])) $filled_fields++;
+                    if (!empty($user['address'])) $filled_fields++;
+                    if (!empty($user['gender'])) $filled_fields++;
+                    if (!empty($user['service'])) $filled_fields++;
+                    if (!empty($user['qualifications'])) $filled_fields++;
+                    if (!empty($user['experience'])) $filled_fields++;
+                    if (!empty($user['specialization'])) $filled_fields++;
+                    
+                    $completion_percentage = round(($filled_fields / $total_fields) * 100);
+                    ?>
+                    
+                    <div class="profile-completion-content">
+                        <div class="profile-avatar">
+                            <?php if (!empty($user['image'])): ?>
+                                <img src="../assets/images/pet_sitters/<?php echo htmlspecialchars($user['image']); ?>" alt="<?php echo htmlspecialchars($user['fullName']); ?>">
+                            <?php else: ?>
+                                <div class="avatar-placeholder">
+                                    <i class="fas fa-user"></i>
                                 </div>
-                                <p class="mb-1 small">
-                                    <i class="fas fa-user me-2"></i>
-                                    Owner: <?php echo htmlspecialchars($booking['ownerName']); ?>
-                                </p>
-                                <p class="mb-1 small">
-                                    <i class="fas fa-calendar me-2"></i>
-                                    <?php echo date('M d, Y', strtotime($booking['checkInDate'])); ?> - 
-                                    <?php echo date('M d, Y', strtotime($booking['checkOutDate'])); ?>
-                                </p>
-                                <div class="d-flex justify-content-between align-items-center mt-2">
-                                    <small class="text-muted">Booked on <?php echo date('M d, Y', strtotime($booking['created_at'])); ?></small>
-                                    <a href="booking_details.php?id=<?php echo $booking['bookingID']; ?>" class="btn btn-sm btn-outline-secondary">View Details</a>
-                                </div>
-                            </div>
-                            <?php if ($booking !== end($recent_bookings)): ?>
-                                <hr>
                             <?php endif; ?>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Profile Completion -->
-    <?php
-    // Calculate profile completion percentage
-    $total_fields = 9; // fullName, email, contact, address, gender, service, qualifications, experience, specialization
-    $filled_fields = 0;
-    
-    if (!empty($user['fullName'])) $filled_fields++;
-    if (!empty($user['email'])) $filled_fields++;
-    if (!empty($user['contact'])) $filled_fields++;
-    if (!empty($user['address'])) $filled_fields++;
-    if (!empty($user['gender'])) $filled_fields++;
-    if (!empty($user['service'])) $filled_fields++;
-    if (!empty($user['qualifications'])) $filled_fields++;
-    if (!empty($user['experience'])) $filled_fields++;
-    if (!empty($user['specialization'])) $filled_fields++;
-    
-    $completion_percentage = round(($filled_fields / $total_fields) * 100);
-    ?>
-    
-    <div class="row mt-4">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">Profile Completion</h5>
-                </div>
-                <div class="card-body">
-                    <div class="row align-items-center">
-                        <div class="col-md-3">
-                            <div class="text-center mb-3 mb-md-0">
-                                <div class="position-relative d-inline-block">
-                                    <?php if (!empty($user['image'])): ?>
-                                        <img src="../assets/images/pet_sitters/<?php echo htmlspecialchars($user['image']); ?>" class="rounded-circle" width="120" height="120" alt="<?php echo htmlspecialchars($user['fullName']); ?>">
-                                    <?php else: ?>
-                                        <img src="../assets/images/sitter-placeholder.jpg" class="rounded-circle" width="120" height="120" alt="Placeholder">
-                                    <?php endif; ?>
-                                    
-                                    <div class="position-absolute bottom-0 end-0 bg-white rounded-circle p-1">
-                                        <span class="fw-bold text-<?php echo $completion_percentage >= 75 ? 'success' : ($completion_percentage >= 50 ? 'warning' : 'danger'); ?>"><?php echo $completion_percentage; ?>%</span>
-                                    </div>
-                                </div>
+                            <div class="completion-badge">
+                                <?php echo $completion_percentage; ?>%
                             </div>
                         </div>
                         
-                        <div class="col-md-9">
-                            <div class="mb-3">
-                                <div class="progress">
-                                    <div class="progress-bar bg-<?php echo $completion_percentage >= 75 ? 'success' : ($completion_percentage >= 50 ? 'warning' : 'danger'); ?>" role="progressbar" style="width: <?php echo $completion_percentage; ?>%" aria-valuenow="<?php echo $completion_percentage; ?>" aria-valuemin="0" aria-valuemax="100"></div>
+                        <div class="completion-details">
+                            <h5>Profile Completion</h5>
+                            <div class="progress-container">
+                                <div class="progress-bar">
+                                    <div class="progress-fill" style="width: <?php echo $completion_percentage; ?>%"></div>
                                 </div>
+                                <span class="progress-text"><?php echo $completion_percentage; ?>% Complete</span>
                             </div>
-                            
                             <?php if ($completion_percentage < 100): ?>
-                                <p>Complete your profile to attract more pet owners and increase your chances of getting booked.</p>
-                                <a href="profile.php" class="btn btn-primary">Complete Your Profile</a>
+                                <p>Complete your profile to attract more pet owners and increase bookings.</p>
                             <?php else: ?>
-                                <p class="text-success">Great job! Your profile is complete. Pet owners can now find all the information they need about your services.</p>
+                                <p class="text-success">Excellent! Your profile is complete and attractive to pet owners.</p>
                             <?php endif; ?>
                         </div>
+                        
+                        <div class="completion-actions">
+                            <a href="profile.php" class="btn btn-primary-gradient">
+                                <i class="fas fa-edit me-2"></i>
+                                <?php echo $completion_percentage < 100 ? 'Complete Profile' : 'Edit Profile'; ?>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Quick Actions -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="dashboard-card">
+                    <div class="card-header-modern">
+                        <h5 class="card-title-modern">
+                            <i class="fas fa-rocket me-2"></i>
+                            Quick Actions
+                        </h5>
+                    </div>
+                    <div class="card-body-modern">
+                        <div class="row g-3">
+                            <div class="col-lg-3 col-md-6">
+                                <a href="bookings.php" class="quick-action-btn">
+                                    <div class="action-icon primary">
+                                        <i class="fas fa-calendar-alt"></i>
+                                    </div>
+                                    <span>Manage Bookings</span>
+                                </a>
+                            </div>
+                            <div class="col-lg-3 col-md-6">
+                                <a href="services.php" class="quick-action-btn">
+                                    <div class="action-icon success">
+                                        <i class="fas fa-clipboard-list"></i>
+                                    </div>
+                                    <span>Manage Services</span>
+                                </a>
+                            </div>
+                            <div class="col-lg-3 col-md-6">
+                                <a href="reviews.php" class="quick-action-btn">
+                                    <div class="action-icon warning">
+                                        <i class="fas fa-star"></i>
+                                    </div>
+                                    <span>View Reviews</span>
+                                </a>
+                            </div>
+                            <div class="col-lg-3 col-md-6">
+                                <a href="../contact.php" class="quick-action-btn">
+                                    <div class="action-icon info">
+                                        <i class="fas fa-question-circle"></i>
+                                    </div>
+                                    <span>Get Help</span>
+                                </a>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+</section>
+
+<style>
+.dashboard-header-section {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 80px 0 40px;
+    position: relative;
+    overflow: hidden;
+}
+
+.dashboard-header-section::before {
+    content: '';
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="20" cy="20" r="2" fill="rgba(255,255,255,0.1)"/><circle cx="80" cy="40" r="1" fill="rgba(255,255,255,0.1)"/><circle cx="40" cy="80" r="1.5" fill="rgba(255,255,255,0.1)"/></svg>');
+    animation: float 20s infinite linear;
+}
+
+.welcome-badge {
+    display: inline-block;
+    background: rgba(255, 255, 255, 0.2);
+    padding: 8px 16px;
+    border-radius: 50px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-bottom: 16px;
+    backdrop-filter: blur(10px);
+}
+
+.dashboard-title {
+    font-size: 3rem;
+    font-weight: 800;
+    margin-bottom: 16px;
+    line-height: 1.2;
+}
+
+.dashboard-subtitle {
+    font-size: 1.2rem;
+    opacity: 0.9;
+    margin-bottom: 0;
+}
+
+.dashboard-stats-section {
+    padding: 0;
+    margin-top: -40px;
+    position: relative;
+    z-index: 2;
+}
+
+.stat-card-modern {
+    background: white;
+    border-radius: 20px;
+    padding: 32px 24px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.stat-card-modern:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+}
+
+.stat-card-modern::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 4px;
+}
+
+.stat-card-modern.primary::before { background: linear-gradient(90deg, #667eea, #764ba2); }
+.stat-card-modern.success::before { background: linear-gradient(90deg, #10b981, #059669); }
+.stat-card-modern.warning::before { background: linear-gradient(90deg, #f59e0b, #d97706); }
+.stat-card-modern.info::before { background: linear-gradient(90deg, #3b82f6, #1d4ed8); }
+
+.stat-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    color: white;
+    margin-bottom: 20px;
+}
+
+.stat-card-modern.primary .stat-icon { background: linear-gradient(135deg, #667eea, #764ba2); }
+.stat-card-modern.success .stat-icon { background: linear-gradient(135deg, #10b981, #059669); }
+.stat-card-modern.warning .stat-icon { background: linear-gradient(135deg, #f59e0b, #d97706); }
+.stat-card-modern.info .stat-icon { background: linear-gradient(135deg, #3b82f6, #1d4ed8); }
+
+.stat-content h3 {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin-bottom: 8px;
+}
+
+.stat-content p {
+    color: #64748b;
+    font-weight: 500;
+    margin-bottom: 12px;
+}
+
+.stat-trend {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    color: #10b981;
+}
+
+.stat-link {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 2;
+}
+
+.dashboard-content-section {
+    padding: 60px 0;
+}
+
+.dashboard-card {
+    background: white;
+    border-radius: 20px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    overflow: hidden;
+    height: 100%;
+}
+
+.card-header-modern {
+    padding: 24px 32px;
+    border-bottom: 1px solid #f1f5f9;
+    display: flex;
+    justify-content: between;
+    align-items: center;
+    background: #f8f9ff;
+}
+
+.card-title-modern {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #1e293b;
+    margin: 0;
+}
+
+.card-body-modern {
+    padding: 32px;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: #64748b;
+}
+
+.empty-state i {
+    font-size: 3rem;
+    margin-bottom: 16px;
+    color: #cbd5e1;
+}
+
+.booking-item-modern {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px;
+    border-radius: 12px;
+    background: #f8f9ff;
+    margin-bottom: 16px;
+    position: relative;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.booking-item-modern:hover {
+    background: #f1f5f9;
+    transform: translateX(5px);
+}
+
+.booking-avatar {
+    position: relative;
+}
+
+.pet-initial {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 1.2rem;
+}
+
+.booking-details {
+    flex: 1;
+}
+
+.booking-details h6 {
+    font-weight: 600;
+    color: #1e293b;
+    margin-bottom: 4px;
+}
+
+.booking-owner {
+    color: #64748b;
+    font-size: 0.9rem;
+    margin-bottom: 8px;
+}
+
+.booking-date {
+    font-size: 0.85rem;
+    color: #667eea;
+    font-weight: 500;
+}
+
+.booking-status {
+    text-align: right;
+}
+
+.status-badge {
+    padding: 4px 12px;
+    border-radius: 50px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+    display: inline-block;
+}
+
+.status-badge.confirmed { background: #dcfce7; color: #166534; }
+.status-badge.pending { background: #fef3c7; color: #92400e; }
+.status-badge.completed { background: #dbeafe; color: #1e40af; }
+.status-badge.cancelled { background: #fee2e2; color: #991b1b; }
+
+.booking-countdown {
+    font-size: 0.8rem;
+    color: #64748b;
+}
+
+.booking-link {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 2;
+}
+
+.activity-item-modern {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 16px;
+    border-radius: 12px;
+    margin-bottom: 16px;
+    position: relative;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    border-left: 3px solid transparent;
+}
+
+.activity-item-modern:hover {
+    background: #f8f9ff;
+    border-left-color: #667eea;
+}
+
+.activity-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    flex-shrink: 0;
+}
+
+.activity-icon.pending { background: linear-gradient(135deg, #f59e0b, #d97706); }
+.activity-icon.confirmed { background: linear-gradient(135deg, #10b981, #059669); }
+.activity-icon.completed { background: linear-gradient(135deg, #3b82f6, #1d4ed8); }
+.activity-icon.cancelled { background: linear-gradient(135deg, #ef4444, #dc2626); }
+
+.activity-content h6 {
+    font-weight: 600;
+    color: #1e293b;
+    margin-bottom: 4px;
+}
+
+.activity-content p {
+    color: #64748b;
+    font-size: 0.9rem;
+    margin-bottom: 8px;
+}
+
+.activity-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.activity-date {
+    font-size: 0.8rem;
+    color: #9ca3af;
+}
+
+.activity-link {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 2;
+}
+
+.profile-completion-card {
+    background: linear-gradient(135deg, #f8f9ff, #f1f5f9);
+    border-radius: 20px;
+    padding: 32px;
+    border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.profile-completion-content {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+}
+
+.profile-avatar {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.profile-avatar img {
+    width: 80px;
+    height: 80px;
+    border-radius: 20px;
+    object-fit: cover;
+    border: 3px solid white;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.avatar-placeholder {
+    width: 80px;
+    height: 80px;
+    border-radius: 20px;
+    background: linear-gradient(135deg, #e2e8f0, #cbd5e1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    color: #64748b;
+    border: 3px solid white;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.completion-badge {
+    position: absolute;
+    bottom: -5px;
+    right: -5px;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    border: 2px solid white;
+}
+
+.completion-details {
+    flex: 1;
+}
+
+.completion-details h5 {
+    font-weight: 700;
+    color: #1e293b;
+    margin-bottom: 12px;
+}
+
+.progress-container {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 12px;
+}
+
+.progress-bar {
+    flex: 1;
+    height: 8px;
+    background: #e2e8f0;
+    border-radius: 50px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #667eea, #764ba2);
+    border-radius: 50px;
+    transition: width 0.3s ease;
+}
+
+.progress-text {
+    font-weight: 600;
+    color: #667eea;
+    font-size: 0.9rem;
+}
+
+.completion-details p {
+    color: #64748b;
+    margin-bottom: 0;
+}
+
+.completion-actions {
+    flex-shrink: 0;
+}
+
+.quick-action-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 24px 16px;
+    background: white;
+    border-radius: 16px;
+    text-decoration: none;
+    color: #64748b;
+    border: 2px solid #f1f5f9;
+    transition: all 0.3s ease;
+    height: 100%;
+}
+
+.quick-action-btn:hover {
+    color: #667eea;
+    border-color: #667eea;
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px rgba(102, 126, 234, 0.15);
+}
+
+.action-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    color: white;
+}
+
+.action-icon.primary { background: linear-gradient(135deg, #667eea, #764ba2); }
+.action-icon.success { background: linear-gradient(135deg, #10b981, #059669); }
+.action-icon.warning { background: linear-gradient(135deg, #f59e0b, #d97706); }
+.action-icon.info { background: linear-gradient(135deg, #3b82f6, #1d4ed8); }
+
+.quick-action-btn span {
+    font-weight: 500;
+    text-align: center;
+}
+
+@media (max-width: 991px) {
+    .dashboard-title {
+        font-size: 2rem;
+    }
     
-    <!-- Quick Links -->
-    <div class="row mt-4">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">Quick Links</h5>
-                </div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-3 mb-3 mb-md-0">
-                            <a href="bookings.php" class="btn btn-outline-primary w-100 py-3">
-                                <i class="fas fa-calendar-alt me-2"></i> Manage Bookings
-                            </a>
-                        </div>
-                        <div class="col-md-3 mb-3 mb-md-0">
-                            <a href="services.php" class="btn btn-outline-success w-100 py-3">
-                                <i class="fas fa-clipboard-list me-2"></i> Manage Services
-                            </a>
-                        </div>
-                        <div class="col-md-3 mb-3 mb-md-0">
-                            <a href="reviews.php" class="btn btn-outline-warning w-100 py-3">
-                                <i class="fas fa-star me-2"></i> View Reviews
-                            </a>
-                        </div>
-                        <div class="col-md-3">
-                            <a href="../contact.php" class="btn btn-outline-info w-100 py-3">
-                                <i class="fas fa-question-circle me-2"></i> Need Help?
-                            </a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+    .profile-completion-content {
+        flex-direction: column;
+        text-align: center;
+        gap: 20px;
+    }
+    
+    .completion-actions {
+        align-self: stretch;
+    }
+}
+
+@media (max-width: 768px) {
+    .dashboard-header-section {
+        padding: 60px 0 30px;
+    }
+    
+    .dashboard-stats-section {
+        margin-top: -30px;
+    }
+    
+    .card-header-modern {
+        padding: 20px 24px;
+        flex-direction: column;
+        gap: 12px;
+        align-items: flex-start;
+    }
+    
+    .card-body-modern {
+        padding: 24px;
+    }
+    
+    .booking-item-modern {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+    
+    .booking-status {
+        text-align: left;
+        align-self: stretch;
+    }
+}
+</style>
 
 <?php
 // Include footer
