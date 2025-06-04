@@ -111,7 +111,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     
     // If no errors, proceed with booking
     if (empty($errors)) {
-        // Insert booking into database
+        // Insert booking into database with 'Pending' status (no payment yet)
         $booking_sql = "INSERT INTO booking (checkInDate, checkOutDate, checkInTime, checkOutTime, additionalInformation, status, userID, petID, sitterID) VALUES (?, ?, ?, ?, ?, 'Pending', ?, ?, ?)";
         $booking_stmt = $conn->prepare($booking_sql);
         $booking_stmt->bind_param("sssssiii", $check_in_date, $check_out_date, $check_in_time, $check_out_time, $additional_info, $_SESSION['user_id'], $pet_id, $sitter_id);
@@ -119,22 +119,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         if ($booking_stmt->execute()) {
             $booking_id = $booking_stmt->insert_id;
             
-            // Calculate total cost
-            // Convert dates to DateTime objects
-            $check_in_datetime = new DateTime($check_in_date . ' ' . $check_in_time);
-            $check_out_datetime = new DateTime($check_out_date . ' ' . $check_out_time);
-            
-            // Calculate duration in hours
-            $interval = $check_in_datetime->diff($check_out_datetime);
-            $hours = $interval->h + ($interval->days * 24);
-            
-            // Calculate total cost
-            $total_cost = $hours * $sitter['price'];
-            
-            // Redirect to payment page
-            $_SESSION['booking_id'] = $booking_id;
-            $_SESSION['total_amount'] = $total_cost;
-            header("Location: payment.php?type=booking");
+            // Set success message explaining the new process
+            $_SESSION['success_message'] = "Booking request sent successfully! The pet sitter will review your request. You'll be able to pay once they accept.";
+            header("Location: user/bookings.php");
             exit();
         } else {
             $errors[] = "Booking failed: " . $conn->error;
@@ -187,6 +174,43 @@ include_once 'includes/header.php';
                 </div>
             </div>
             
+            <!-- New Booking Process Info -->
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="fas fa-info-circle me-2"></i>Booking Process</h5>
+                    <div class="booking-steps">
+                        <div class="step">
+                            <div class="step-number">1</div>
+                            <div class="step-content">
+                                <strong>Send Request</strong>
+                                <small>Submit your booking details</small>
+                            </div>
+                        </div>
+                        <div class="step">
+                            <div class="step-number">2</div>
+                            <div class="step-content">
+                                <strong>Sitter Reviews</strong>
+                                <small>Pet sitter accepts or declines</small>
+                            </div>
+                        </div>
+                        <div class="step">
+                            <div class="step-number">3</div>
+                            <div class="step-content">
+                                <strong>Payment</strong>
+                                <small>Pay only after acceptance</small>
+                            </div>
+                        </div>
+                        <div class="step">
+                            <div class="step-number">4</div>
+                            <div class="step-content">
+                                <strong>Service</strong>
+                                <small>Enjoy pet sitting service</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
             <?php if (!empty($sitter['latitude']) && !empty($sitter['longitude'])): ?>
                 <div class="card mb-4">
                     <div class="card-body">
@@ -212,6 +236,12 @@ include_once 'includes/header.php';
                             </ul>
                         </div>
                     <?php endif; ?>
+                    
+                    <!-- Updated info banner -->
+                    <div class="alert alert-info">
+                        <h6><i class="fas fa-lightbulb me-2"></i>No Payment Required Yet!</h6>
+                        <p class="mb-0">Submit your booking request first. You'll only pay after <?php echo htmlspecialchars($sitter['fullName']); ?> accepts your request.</p>
+                    </div>
                     
                     <?php if (empty($pets)): ?>
                         <div class="alert alert-warning">
@@ -254,6 +284,30 @@ include_once 'includes/header.php';
                                 </div>
                             </div>
                             
+                            <!-- Cost Calculator -->
+                            <div class="mb-3">
+                                <div class="cost-calculator card bg-light">
+                                    <div class="card-body">
+                                        <h6><i class="fas fa-calculator me-2"></i>Estimated Cost</h6>
+                                        <div class="cost-breakdown">
+                                            <div class="cost-item">
+                                                <span>Hourly Rate:</span>
+                                                <span>$<?php echo number_format($sitter['price'], 2); ?>/hour</span>
+                                            </div>
+                                            <div class="cost-item">
+                                                <span>Duration:</span>
+                                                <span id="duration">Select dates to calculate</span>
+                                            </div>
+                                            <div class="cost-item total">
+                                                <span><strong>Estimated Total:</strong></span>
+                                                <span id="total-cost"><strong>$0.00</strong></span>
+                                            </div>
+                                        </div>
+                                        <small class="text-muted">Final cost will be calculated when the sitter accepts your booking.</small>
+                                    </div>
+                                </div>
+                            </div>
+                            
                             <div class="mb-3">
                                 <label for="additional_info" class="form-label">Additional Information</label>
                                 <textarea class="form-control" id="additional_info" name="additional_info" rows="4" placeholder="Please provide any specific instructions, pet preferences, or medical information that the sitter should know."></textarea>
@@ -269,7 +323,9 @@ include_once 'includes/header.php';
                             </div>
                             
                             <div class="d-grid gap-2">
-                                <button type="submit" class="btn btn-primary btn-lg">Proceed to Payment</button>
+                                <button type="submit" class="btn btn-primary btn-lg">
+                                    <i class="fas fa-paper-plane me-2"></i>Send Booking Request
+                                </button>
                             </div>
                         </form>
                     <?php endif; ?>
@@ -278,6 +334,118 @@ include_once 'includes/header.php';
         </div>
     </div>
 </div>
+
+<style>
+.booking-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.step {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.step-number {
+    width: 32px;
+    height: 32px;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 0.9rem;
+    flex-shrink: 0;
+}
+
+.step-content {
+    display: flex;
+    flex-direction: column;
+}
+
+.step-content strong {
+    color: #1e293b;
+    font-size: 0.9rem;
+}
+
+.step-content small {
+    color: #64748b;
+    font-size: 0.8rem;
+}
+
+.cost-calculator {
+    border: 1px solid #e2e8f0;
+}
+
+.cost-breakdown {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.cost-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.cost-item.total {
+    padding-top: 8px;
+    border-top: 1px solid #e2e8f0;
+    margin-top: 8px;
+}
+
+@media (max-width: 768px) {
+    .booking-steps {
+        gap: 12px;
+    }
+    
+    .step {
+        flex-direction: column;
+        text-align: center;
+        gap: 8px;
+    }
+}
+</style>
+
+<script>
+// Cost calculator
+document.addEventListener('DOMContentLoaded', function() {
+    const checkInDate = document.getElementById('check_in_date');
+    const checkOutDate = document.getElementById('check_out_date');
+    const checkInTime = document.getElementById('check_in_time');
+    const checkOutTime = document.getElementById('check_out_time');
+    const hourlyRate = <?php echo $sitter['price']; ?>;
+    
+    function calculateCost() {
+        if (checkInDate.value && checkOutDate.value && checkInTime.value && checkOutTime.value) {
+            const checkIn = new Date(checkInDate.value + 'T' + checkInTime.value);
+            const checkOut = new Date(checkOutDate.value + 'T' + checkOutTime.value);
+            
+            if (checkOut > checkIn) {
+                const diffTime = Math.abs(checkOut - checkIn);
+                const diffHours = Math.ceil(diffTime / (1000 * 60 * 60));
+                const totalCost = diffHours * hourlyRate;
+                
+                document.getElementById('duration').textContent = diffHours + ' hours';
+                document.getElementById('total-cost').innerHTML = '<strong>$' + totalCost.toFixed(2) + '</strong>';
+            } else {
+                document.getElementById('duration').textContent = 'Invalid date/time';
+                document.getElementById('total-cost').innerHTML = '<strong>$0.00</strong>';
+            }
+        }
+    }
+    
+    checkInDate.addEventListener('change', calculateCost);
+    checkOutDate.addEventListener('change', calculateCost);
+    checkInTime.addEventListener('change', calculateCost);
+    checkOutTime.addEventListener('change', calculateCost);
+});
+</script>
 
 <?php if (!empty($sitter['latitude']) && !empty($sitter['longitude'])): ?>
 <!-- Google Maps Script -->

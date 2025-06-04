@@ -24,39 +24,64 @@ if (!isset($_GET['type']) || ($_GET['type'] !== 'booking' && $_GET['type'] !== '
 $payment_type = $_GET['type'];
 $total_amount = 0;
 $payment_details = [];
+$booking_id = null;
+$cart_id = null;
 
 // Get payment details based on payment type
 if ($payment_type === 'booking') {
-    // Check if booking_id is in session
-    if (!isset($_SESSION['booking_id']) || !isset($_SESSION['total_amount'])) {
-        $_SESSION['error_message'] = "Invalid booking session.";
-        header("Location: index.php");
+    // Get booking_id from URL parameter
+    if (!isset($_GET['booking_id']) || empty($_GET['booking_id'])) {
+        $_SESSION['error_message'] = "Missing booking ID.";
+        header("Location: user/bookings.php");
         exit();
     }
     
-    $booking_id = $_SESSION['booking_id'];
-    $total_amount = $_SESSION['total_amount'];
+    $booking_id = intval($_GET['booking_id']);
     
-    // Get booking details
-    $booking_sql = "SELECT b.*, p.petName, ps.fullName as sitterName, ps.service 
+    // Get booking details and verify it belongs to user and is confirmed but not paid
+    $booking_sql = "SELECT b.*, p.petName, ps.fullName as sitterName, ps.service, ps.price as hourlyRate
                     FROM booking b 
                     JOIN pet_profile p ON b.petID = p.petID 
                     JOIN pet_sitter ps ON b.sitterID = ps.userID 
-                    WHERE b.bookingID = ? AND b.userID = ?";
+                    WHERE b.bookingID = ? AND b.userID = ? AND b.status = 'Confirmed'";
     $booking_stmt = $conn->prepare($booking_sql);
     $booking_stmt->bind_param("ii", $booking_id, $_SESSION['user_id']);
     $booking_stmt->execute();
     $booking_result = $booking_stmt->get_result();
     
     if ($booking_result->num_rows === 0) {
-        $_SESSION['error_message'] = "Booking not found.";
-        header("Location: index.php");
+        $_SESSION['error_message'] = "Booking not found, doesn't belong to you, or is not ready for payment.";
+        header("Location: user/bookings.php");
         exit();
     }
     
     $booking = $booking_result->fetch_assoc();
+    
+    // Check if already paid
+    $payment_check_sql = "SELECT paymentID FROM payment WHERE bookingID = ? AND status = 'Completed'";
+    $payment_check_stmt = $conn->prepare($payment_check_sql);
+    $payment_check_stmt->bind_param("i", $booking_id);
+    $payment_check_stmt->execute();
+    $payment_check_result = $payment_check_stmt->get_result();
+    
+    if ($payment_check_result->num_rows > 0) {
+        $_SESSION['error_message'] = "This booking has already been paid for.";
+        header("Location: user/bookings.php");
+        exit();
+    }
+    $payment_check_stmt->close();
+    
+    // Calculate total amount based on booking duration
+    $check_in_datetime = new DateTime($booking['checkInDate'] . ' ' . $booking['checkInTime']);
+    $check_out_datetime = new DateTime($booking['checkOutDate'] . ' ' . $booking['checkOutTime']);
+    $interval = $check_in_datetime->diff($check_out_datetime);
+    $hours = $interval->h + ($interval->days * 24) + ($interval->i > 0 ? 1 : 0); // Round up partial hours
+    $total_amount = $hours * $booking['hourlyRate'];
+    
     $payment_details = $booking;
+    $payment_details['duration_hours'] = $hours;
     $booking_stmt->close();
+    
 } elseif ($payment_type === 'cart') {
     // Get active cart for the user
     $cart_sql = "SELECT c.* FROM cart c WHERE c.userID = ? AND c.orderID IS NULL";
@@ -140,42 +165,46 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     
     // If no errors, proceed with payment
     if (empty($errors)) {
-        // In a real-world scenario, you would integrate with a payment gateway
-        // For this demo, we'll just simulate a successful payment
-        
-        if ($payment_type === 'booking') {
+        if ($payment_type === 'booking' && $booking_id) {
             // Create payment record
             $payment_sql = "INSERT INTO payment (amount, payment_method, status, bookingID) VALUES (?, ?, 'Completed', ?)";
             $payment_stmt = $conn->prepare($payment_sql);
             $payment_stmt->bind_param("dsi", $total_amount, $payment_method, $booking_id);
             
             if ($payment_stmt->execute()) {
-                // Update booking status
-                $update_sql = "UPDATE booking SET status = 'Confirmed' WHERE bookingID = ?";
+                // Update booking status to 'Paid'
+                $update_sql = "UPDATE booking SET status = 'Paid' WHERE bookingID = ?";
                 $update_stmt = $conn->prepare($update_sql);
                 $update_stmt->bind_param("i", $booking_id);
-                $update_stmt->execute();
-                $update_stmt->close();
                 
-                // Clear session variables
-                unset($_SESSION['booking_id']);
-                unset($_SESSION['total_amount']);
-                
-                // Set success message
-                $_SESSION['success_message'] = "Payment successful! Your booking has been confirmed.";
-                header("Location: user/bookings.php");
-                exit();
+                if ($update_stmt->execute()) {
+                    $update_stmt->close();
+                    $_SESSION['success_message'] = "Payment successful! Your booking is now confirmed and paid.";
+                    
+                    // Debug: Check if we're in root directory or subdirectory
+                    $redirect_path = "user/bookings.php";
+                    if (!file_exists($redirect_path)) {
+                        $redirect_path = "../user/bookings.php";
+                    }
+                    
+                    header("Location: " . $redirect_path);
+                    exit();
+                } else {
+                    $errors[] = "Failed to update booking status: " . $update_stmt->error;
+                    $update_stmt->close();
+                }
             } else {
-                $errors[] = "Payment failed: " . $conn->error;
+                $errors[] = "Payment failed: " . $payment_stmt->error;
             }
             
             $payment_stmt->close();
-        } elseif ($payment_type === 'cart') {
+            
+        } elseif ($payment_type === 'cart' && $cart_id) {
             // Create order
             $order_sql = "INSERT INTO `order` (date, time, address, contact, status, userID) VALUES (CURDATE(), CURTIME(), ?, ?, 'Pending', ?)";
             $order_stmt = $conn->prepare($order_sql);
             
-            // Get user's address and contact from the database
+            // Get user's address and contact
             $user_sql = "SELECT address, contact FROM pet_owner WHERE userID = ?";
             $user_stmt = $conn->prepare($user_sql);
             $user_stmt->bind_param("i", $_SESSION['user_id']);
@@ -201,7 +230,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 $payment_stmt->bind_param("dsi", $total_amount, $payment_method, $cart_id);
                 
                 if ($payment_stmt->execute()) {
-                    // Set success message
                     $_SESSION['success_message'] = "Payment successful! Your order has been placed.";
                     header("Location: user/orders.php");
                     exit();
@@ -240,7 +268,15 @@ include_once 'includes/header.php';
                         </div>
                     <?php endif; ?>
                     
-                    <form action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"] . "?type=" . $payment_type); ?>" method="post" id="payment-form">
+                    <!-- Booking confirmation info -->
+                    <?php if ($payment_type === 'booking'): ?>
+                        <div class="alert alert-success">
+                            <h6><i class="fas fa-check-circle me-2"></i>Booking Confirmed!</h6>
+                            <p class="mb-0"><?php echo htmlspecialchars($payment_details['sitterName']); ?> has accepted your booking request. Complete payment to finalize the booking.</p>
+                        </div>
+                    <?php endif; ?>
+                    
+                    <form action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"] . "?type=" . $payment_type . ($payment_type === 'booking' ? "&booking_id=" . $booking_id : "")); ?>" method="post" id="payment-form">
                         <div class="mb-4">
                             <h5>Payment Method</h5>
                             <div class="form-check mb-2">
@@ -327,7 +363,9 @@ include_once 'includes/header.php';
                         </div>
                         
                         <div class="d-grid gap-2">
-                            <button type="submit" class="btn btn-primary btn-lg">Pay $<?php echo number_format($total_amount, 2); ?></button>
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                Complete Payment - $<?php echo number_format($total_amount, 2); ?>
+                            </button>
                         </div>
                     </form>
                 </div>
@@ -337,7 +375,7 @@ include_once 'includes/header.php';
         <div class="col-md-4">
             <div class="card">
                 <div class="card-body">
-                    <h5 class="card-title">Order Summary</h5>
+                    <h5 class="card-title">Payment Summary</h5>
                     <hr>
                     
                     <?php if ($payment_type === 'booking'): ?>
@@ -348,6 +386,22 @@ include_once 'includes/header.php';
                             <p><strong>Pet:</strong> <?php echo htmlspecialchars($payment_details['petName']); ?></p>
                             <p><strong>Check-in:</strong> <?php echo date('M d, Y', strtotime($payment_details['checkInDate'])) . ' at ' . date('h:i A', strtotime($payment_details['checkInTime'])); ?></p>
                             <p><strong>Check-out:</strong> <?php echo date('M d, Y', strtotime($payment_details['checkOutDate'])) . ' at ' . date('h:i A', strtotime($payment_details['checkOutTime'])); ?></p>
+                            
+                            <!-- Cost breakdown -->
+                            <div class="cost-breakdown mt-3 p-3 bg-light rounded">
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span>Hourly Rate:</span>
+                                    <span>$<?php echo number_format($payment_details['hourlyRate'], 2); ?></span>
+                                </div>
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span>Duration:</span>
+                                    <span><?php echo $payment_details['duration_hours']; ?> hours</span>
+                                </div>
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span>Subtotal:</span>
+                                    <span>$<?php echo number_format($total_amount, 2); ?></span>
+                                </div>
+                            </div>
                         </div>
                     <?php elseif ($payment_type === 'cart'): ?>
                         <div class="mb-3">

@@ -20,7 +20,7 @@ $user_id = $_SESSION['user_id'];
 if (isset($_POST['cancel_booking']) && isset($_POST['booking_id'])) {
     $booking_id = $_POST['booking_id'];
     
-    // Check if booking belongs to user and can be cancelled
+    // Check if booking belongs to user and can be cancelled (only Pending or Confirmed status)
     $check_sql = "SELECT * FROM booking WHERE bookingID = ? AND userID = ? AND status IN ('Pending', 'Confirmed')";
     $check_stmt = $conn->prepare($check_sql);
     $check_stmt->bind_param("ii", $booking_id, $user_id);
@@ -55,8 +55,9 @@ if (isset($_POST['cancel_booking']) && isset($_POST['booking_id'])) {
 $status_filter = isset($_GET['status']) ? $_GET['status'] : '';
 $sort_by = isset($_GET['sort_by']) ? $_GET['sort_by'] : 'newest';
 
-// Prepare SQL query
-$sql = "SELECT b.*, p.petName, ps.fullName as sitterName, ps.service 
+// Prepare SQL query - Include payment status check
+$sql = "SELECT b.*, p.petName, ps.fullName as sitterName, ps.service, ps.price as hourlyRate,
+        (SELECT COUNT(*) FROM payment WHERE bookingID = b.bookingID AND status = 'Completed') as is_paid
         FROM booking b 
         JOIN pet_profile p ON b.petID = p.petID 
         JOIN pet_sitter ps ON b.sitterID = ps.userID 
@@ -142,8 +143,9 @@ include_once '../includes/header.php';
                         <label class="filter-label-modern">Filter by Status</label>
                         <select class="form-select modern-select" name="status">
                             <option value="" <?php echo empty($status_filter) ? 'selected' : ''; ?>>All Bookings</option>
-                            <option value="Pending" <?php echo ($status_filter === 'Pending') ? 'selected' : ''; ?>>Pending</option>
-                            <option value="Confirmed" <?php echo ($status_filter === 'Confirmed') ? 'selected' : ''; ?>>Confirmed</option>
+                            <option value="Pending" <?php echo ($status_filter === 'Pending') ? 'selected' : ''; ?>>Pending Request</option>
+                            <option value="Confirmed" <?php echo ($status_filter === 'Confirmed') ? 'selected' : ''; ?>>Confirmed (Payment Due)</option>
+                            <option value="Paid" <?php echo ($status_filter === 'Paid') ? 'selected' : ''; ?>>Paid & Ready</option>
                             <option value="Completed" <?php echo ($status_filter === 'Completed') ? 'selected' : ''; ?>>Completed</option>
                             <option value="Cancelled" <?php echo ($status_filter === 'Cancelled') ? 'selected' : ''; ?>>Cancelled</option>
                         </select>
@@ -190,16 +192,34 @@ include_once '../includes/header.php';
             </div>
             
             <div class="bookings-grid">
-                <?php foreach ($bookings as $booking): ?>
+                <?php foreach ($bookings as $booking): 
+                    // Calculate booking cost
+                    $check_in_datetime = new DateTime($booking['checkInDate'] . ' ' . $booking['checkInTime']);
+                    $check_out_datetime = new DateTime($booking['checkOutDate'] . ' ' . $booking['checkOutTime']);
+                    $interval = $check_in_datetime->diff($check_out_datetime);
+                    $hours = $interval->h + ($interval->days * 24) + ($interval->i > 0 ? 1 : 0);
+                    $total_cost = $hours * $booking['hourlyRate'];
+                ?>
                     <div class="booking-card-modern">
                         <div class="booking-status-indicator status-<?php echo strtolower($booking['status']); ?>"></div>
                         
                         <div class="booking-header">
                             <div class="booking-info">
                                 <h5 class="booking-title">Booking #<?php echo $booking['bookingID']; ?></h5>
-                                <span class="booking-status-badge status-<?php echo strtolower($booking['status']); ?>">
-                                    <?php echo $booking['status']; ?>
-                                </span>
+                                <div class="status-badges">
+                                    <span class="booking-status-badge status-<?php echo strtolower($booking['status']); ?>">
+                                        <?php echo $booking['status']; ?>
+                                    </span>
+                                    <?php if ($booking['status'] === 'Confirmed' && $booking['is_paid'] == 0): ?>
+                                        <span class="payment-badge payment-due">
+                                            <i class="fas fa-exclamation-triangle me-1"></i>Payment Due
+                                        </span>
+                                    <?php elseif ($booking['is_paid'] > 0): ?>
+                                        <span class="payment-badge payment-completed">
+                                            <i class="fas fa-check me-1"></i>Paid
+                                        </span>
+                                    <?php endif; ?>
+                                </div>
                             </div>
                         </div>
                         
@@ -246,26 +266,68 @@ include_once '../includes/header.php';
                                     </span>
                                 </div>
                             </div>
+
+                            <div class="detail-item">
+                                <div class="detail-icon">
+                                    <i class="fas fa-dollar-sign"></i>
+                                </div>
+                                <div class="detail-content">
+                                    <span class="detail-label">Total Cost</span>
+                                    <span class="detail-value cost">$<?php echo number_format($total_cost, 2); ?></span>
+                                </div>
+                            </div>
                         </div>
                         
+                        <!-- Status-based action buttons -->
                         <div class="booking-actions">
                             <a href="booking_details.php?id=<?php echo $booking['bookingID']; ?>" class="btn btn-outline-primary btn-sm">
                                 <i class="fas fa-eye me-1"></i> View Details
                             </a>
                             
-                            <?php if ($booking['status'] === 'Pending' || $booking['status'] === 'Confirmed'): ?>
-                                <form action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>" method="post" class="d-inline" onsubmit="return confirm('Are you sure you want to cancel this booking?');">
+                            <?php if ($booking['status'] === 'Pending'): ?>
+                                <div class="status-info pending-info">
+                                    <i class="fas fa-clock me-1"></i> Waiting for sitter response
+                                </div>
+                                <form action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>" method="post" class="d-inline" onsubmit="return confirm('Are you sure you want to cancel this booking request?');">
+                                    <input type="hidden" name="booking_id" value="<?php echo $booking['bookingID']; ?>">
+                                    <button type="submit" name="cancel_booking" class="btn btn-outline-danger btn-sm">
+                                        <i class="fas fa-times me-1"></i> Cancel Request
+                                    </button>
+                                </form>
+                            
+                            <?php elseif ($booking['status'] === 'Confirmed' && $booking['is_paid'] == 0): ?>
+                                <div class="payment-due-section">
+                                    <div class="status-info confirmed-info">
+                                        <i class="fas fa-check-circle me-1"></i> Sitter accepted! Payment required
+                                    </div>
+                                    <a href="../payment.php?type=booking&booking_id=<?php echo $booking['bookingID']; ?>" class="btn btn-success btn-sm payment-btn">
+                                        <i class="fas fa-credit-card me-1"></i> Pay Now ($<?php echo number_format($total_cost, 2); ?>)
+                                    </a>
+                                </div>
+                                <form action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>" method="post" class="d-inline" onsubmit="return confirm('Are you sure you want to cancel this confirmed booking?');">
                                     <input type="hidden" name="booking_id" value="<?php echo $booking['bookingID']; ?>">
                                     <button type="submit" name="cancel_booking" class="btn btn-outline-danger btn-sm">
                                         <i class="fas fa-times me-1"></i> Cancel
                                     </button>
                                 </form>
-                            <?php endif; ?>
                             
-                            <?php if ($booking['status'] === 'Completed'): ?>
+                            <?php elseif ($booking['status'] === 'Paid'): ?>
+                                <div class="status-info paid-info">
+                                    <i class="fas fa-check-double me-1"></i> Paid & Ready - Service upcoming
+                                </div>
+                            
+                            <?php elseif ($booking['status'] === 'Completed'): ?>
+                                <div class="status-info completed-info">
+                                    <i class="fas fa-star me-1"></i> Service completed
+                                </div>
                                 <a href="add_review.php?sitter_id=<?php echo $booking['sitterID']; ?>&booking_id=<?php echo $booking['bookingID']; ?>" class="btn btn-primary-gradient btn-sm">
-                                    <i class="fas fa-star me-1"></i> Review
+                                    <i class="fas fa-star me-1"></i> Review Sitter
                                 </a>
+                            
+                            <?php elseif ($booking['status'] === 'Cancelled'): ?>
+                                <div class="status-info cancelled-info">
+                                    <i class="fas fa-ban me-1"></i> Booking cancelled
+                                </div>
                             <?php endif; ?>
                         </div>
                     </div>
@@ -282,22 +344,6 @@ include_once '../includes/header.php';
     padding: 80px 0;
     position: relative;
     overflow: hidden;
-}
-
-.page-header-modern::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="20" cy="20" r="1" fill="rgba(255,255,255,0.1)"/><circle cx="80" cy="40" r="0.5" fill="rgba(255,255,255,0.1)"/><circle cx="40" cy="80" r="1.5" fill="rgba(255,255,255,0.1)"/></svg>');
-    animation: float 20s infinite linear;
-}
-
-.page-header-content {
-    position: relative;
-    z-index: 2;
 }
 
 .page-badge {
@@ -318,20 +364,10 @@ include_once '../includes/header.php';
     margin-bottom: 16px;
 }
 
-.page-subtitle {
-    font-size: 1.2rem;
-    opacity: 0.9;
-    margin-bottom: 0;
-}
-
 .page-actions {
     text-align: right;
     position: relative;
     z-index: 2;
-}
-
-.page-actions .btn {
-    margin-left: 12px;
 }
 
 .filters-section-modern {
@@ -347,78 +383,9 @@ include_once '../includes/header.php';
     border: 1px solid rgba(0, 0, 0, 0.05);
 }
 
-.filter-label-modern {
-    font-weight: 600;
-    color: #374151;
-    margin-bottom: 8px;
-    display: block;
-    font-size: 0.9rem;
-}
-
-.modern-select {
-    padding: 12px 16px;
-    border: 2px solid #e5e7eb;
-    border-radius: 12px;
-    transition: all 0.3s ease;
-    background: white;
-}
-
-.modern-select:focus {
-    border-color: #667eea;
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-}
-
 .content-section-modern {
     padding: 80px 0;
     background: white;
-}
-
-.empty-state-modern {
-    text-align: center;
-    padding: 80px 40px;
-    background: #f8f9ff;
-    border-radius: 20px;
-    border: 2px dashed #d1d5db;
-    max-width: 500px;
-    margin: 0 auto;
-}
-
-.empty-icon {
-    font-size: 4rem;
-    color: #9ca3af;
-    margin-bottom: 24px;
-}
-
-.empty-state-modern h4 {
-    color: #374151;
-    margin-bottom: 16px;
-    font-weight: 600;
-}
-
-.empty-state-modern p {
-    color: #6b7280;
-    margin-bottom: 32px;
-}
-
-.content-header {
-    margin-bottom: 40px;
-}
-
-.content-header h3 {
-    font-size: 2rem;
-    font-weight: 700;
-    color: #1e293b;
-    margin: 0;
-}
-
-.count-badge {
-    background: linear-gradient(135deg, #f1f5f9, #e2e8f0);
-    color: #64748b;
-    padding: 4px 12px;
-    border-radius: 50px;
-    font-size: 0.8rem;
-    font-weight: 500;
-    margin-left: 12px;
 }
 
 .bookings-grid {
@@ -453,24 +420,15 @@ include_once '../includes/header.php';
 
 .booking-status-indicator.status-pending { background: #f59e0b; }
 .booking-status-indicator.status-confirmed { background: #10b981; }
-.booking-status-indicator.status-completed { background: #3b82f6; }
+.booking-status-indicator.status-paid { background: #3b82f6; }
+.booking-status-indicator.status-completed { background: #6366f1; }
 .booking-status-indicator.status-cancelled { background: #ef4444; }
 
-.booking-header {
-    margin-bottom: 20px;
-}
-
-.booking-info {
+.status-badges {
     display: flex;
-    justify-content: space-between;
+    gap: 8px;
     align-items: center;
-}
-
-.booking-title {
-    font-size: 1.2rem;
-    font-weight: 600;
-    color: #1e293b;
-    margin: 0;
+    flex-wrap: wrap;
 }
 
 .booking-status-badge {
@@ -483,62 +441,105 @@ include_once '../includes/header.php';
 
 .booking-status-badge.status-pending { background: #fef3c7; color: #92400e; }
 .booking-status-badge.status-confirmed { background: #dcfce7; color: #166534; }
-.booking-status-badge.status-completed { background: #dbeafe; color: #1e40af; }
+.booking-status-badge.status-paid { background: #dbeafe; color: #1e40af; }
+.booking-status-badge.status-completed { background: #e0e7ff; color: #3730a3; }
 .booking-status-badge.status-cancelled { background: #fee2e2; color: #991b1b; }
 
-.booking-details {
-    margin-bottom: 24px;
+.payment-badge {
+    padding: 4px 8px;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
 }
 
-.detail-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 16px;
+.payment-badge.payment-due {
+    background: #fef3c7;
+    color: #92400e;
+    animation: pulse-payment 2s infinite;
 }
 
-.detail-item:last-child {
-    margin-bottom: 0;
+.payment-badge.payment-completed {
+    background: #dcfce7;
+    color: #166534;
 }
 
-.detail-icon {
-    width: 36px;
-    height: 36px;
-    background: linear-gradient(135deg, #f1f5f9, #e2e8f0);
-    border-radius: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #667eea;
-    flex-shrink: 0;
+@keyframes pulse-payment {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
 }
 
-.detail-content {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.detail-label {
-    font-size: 0.8rem;
-    color: #9ca3af;
-    font-weight: 500;
-}
-
-.detail-value {
-    color: #374151;
-    font-weight: 500;
+.detail-value.cost {
+    font-weight: 700;
+    color: #10b981;
+    font-size: 1.1rem;
 }
 
 .booking-actions {
     display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 20px;
 }
 
-.booking-actions .btn {
+.status-info {
+    background: #f8fafc;
+    color: #64748b;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    text-align: center;
+}
+
+.status-info.pending-info {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.status-info.confirmed-info {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.status-info.paid-info {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+.status-info.completed-info {
+    background: #e0e7ff;
+    color: #3730a3;
+}
+
+.status-info.cancelled-info {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.payment-due-section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.payment-btn {
+    animation: glow-payment 2s infinite;
+    font-weight: 600;
+}
+
+@keyframes glow-payment {
+    0%, 100% { box-shadow: 0 0 5px rgba(34, 197, 94, 0.5); }
+    50% { box-shadow: 0 0 20px rgba(34, 197, 94, 0.8); }
+}
+
+.action-row {
+    display: flex;
+    gap: 8px;
+}
+
+.action-row .btn {
     flex: 1;
-    min-width: 120px;
 }
 
 @media (max-width: 768px) {
@@ -551,26 +552,12 @@ include_once '../includes/header.php';
         margin-top: 24px;
     }
     
-    .page-actions .btn {
-        margin-left: 0;
-        margin-right: 12px;
-        margin-bottom: 8px;
-    }
-    
     .bookings-grid {
         grid-template-columns: 1fr;
     }
     
-    .filter-card-modern {
-        padding: 24px;
-    }
-    
-    .booking-actions {
-        flex-direction: column;
-    }
-    
-    .booking-actions .btn {
-        min-width: auto;
+    .status-badges {
+        justify-content: flex-start;
     }
 }
 </style>
