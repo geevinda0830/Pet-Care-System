@@ -589,37 +589,177 @@ while ($row = $featured_sitters_result->fetch_assoc()) {
 </section>
 
 <!-- Newsletter CTA -->
-<section class="newsletter-section">
+<section class="newsletter-section-improved">
     <div class="container">
-        <div class="newsletter-card">
+        <div class="newsletter-card-improved">
             <div class="row align-items-center">
                 <div class="col-lg-6">
-                    <div class="newsletter-content">
-                        <div class="newsletter-icon">🎉</div>
+                    <div class="newsletter-content-improved">
+                        <div class="newsletter-icon-improved">🎉</div>
                         <h3>Get 10% Off Your First Order!</h3>
                         <p>Subscribe to our newsletter for exclusive deals, pet care tips, and new product updates. Join over 10,000 happy pet parents!</p>
-                        <div class="newsletter-benefits">
-                            <span class="benefit">✨ Exclusive Discounts</span>
-                            <span class="benefit">🐾 Pet Care Tips</span>
-                            <span class="benefit">🆕 New Product Alerts</span>
+                        <div class="newsletter-benefits-improved">
+                            <span class="benefit-improved">✨ Exclusive Discounts</span>
+                            <span class="benefit-improved">🐾 Pet Care Tips</span>
+                            <span class="benefit-improved">🆕 New Product Alerts</span>
                         </div>
                     </div>
                 </div>
                 <div class="col-lg-6">
-                    <form class="newsletter-form">
-                        <div class="input-group">
-                            <input type="email" class="form-control" placeholder="Enter your email address" required>
-                            <button class="btn btn-light" type="submit">
+                    <form class="newsletter-form-improved">
+                        <div class="input-group newsletter-input-group">
+                            <input type="email" class="form-control newsletter-input-improved" placeholder="Enter your email address" required>
+                            <button class="btn newsletter-btn-improved" type="submit">
                                 Subscribe Now <i class="fas fa-paper-plane ms-1"></i>
                             </button>
                         </div>
-                        <small class="form-text">*No spam, unsubscribe anytime</small>
+                        <small class="form-text-improved">*No spam, unsubscribe anytime</small>
                     </form>
                 </div>
             </div>
         </div>
     </div>
 </section>
+
+<style>
+.newsletter-section-improved {
+    padding: 80px 0;
+    background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+    position: relative;
+}
+
+.newsletter-card-improved {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(20px);
+    border-radius: 24px;
+    padding: 60px 40px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+}
+
+.newsletter-content-improved {
+    color: #1e293b;
+}
+
+.newsletter-icon-improved {
+    font-size: 3rem;
+    margin-bottom: 24px;
+    display: block;
+}
+
+.newsletter-content-improved h3 {
+    font-size: 2.2rem;
+    font-weight: 700;
+    margin-bottom: 16px;
+    color: #1e293b;
+}
+
+.newsletter-content-improved p {
+    font-size: 1.1rem;
+    margin-bottom: 24px;
+    color: #4b5563;
+    line-height: 1.6;
+}
+
+.newsletter-benefits-improved {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 0;
+}
+
+.benefit-improved {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.newsletter-form-improved {
+    padding-left: 0;
+}
+
+.newsletter-input-group {
+    background: #f8f9fa;
+    border-radius: 50px;
+    padding: 4px;
+    margin-bottom: 12px;
+    border: 2px solid #e9ecef;
+}
+
+.newsletter-input-improved {
+    border: none;
+    background: transparent;
+    padding: 12px 20px;
+    font-size: 1rem;
+    color: #495057;
+}
+
+.newsletter-input-improved:focus {
+    box-shadow: none;
+    outline: none;
+    background: transparent;
+}
+
+.newsletter-input-improved::placeholder {
+    color: #6c757d;
+}
+
+.newsletter-btn-improved {
+    border-radius: 50px;
+    padding: 12px 24px;
+    font-weight: 600;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    border: none;
+    color: white;
+    transition: all 0.3s ease;
+}
+
+.newsletter-btn-improved:hover {
+    background: linear-gradient(135deg, #5a6fd8, #6b4190);
+    transform: translateY(-1px);
+    color: white;
+}
+
+.form-text-improved {
+    color: #6c757d;
+    text-align: center;
+    font-size: 0.85rem;
+}
+
+@media (max-width: 991px) {
+    .newsletter-form-improved {
+        padding-left: 0;
+        margin-top: 40px;
+        text-align: center;
+    }
+    
+    .newsletter-benefits-improved {
+        justify-content: center;
+    }
+}
+
+@media (max-width: 768px) {
+    .newsletter-input-group {
+        flex-direction: column;
+        padding: 8px;
+    }
+    
+    .newsletter-input-improved {
+        border-radius: 12px;
+        margin-bottom: 12px;
+        background: white;
+        border: 1px solid #dee2e6;
+    }
+    
+    .newsletter-btn-improved {
+        border-radius: 12px;
+        width: 100%;
+    }
+}
+</style>
 
 <?php
 // Include footer

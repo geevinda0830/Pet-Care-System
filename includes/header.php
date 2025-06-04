@@ -30,8 +30,11 @@ $base_url = "http://localhost/pet_care_system";
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             backdrop-filter: blur(20px);
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            padding: 16px 0;
-            box-shadow: 0 4px 20px rgba(102, 126, 234, 0.2);
+            padding: 20px 0;
+            box-shadow: 0 4px 20px rgba(102, 126, 234, 0.3);
+            position: sticky;
+            top: 0;
+            z-index: 1050;
         }
         
         .navbar-brand-modern {
@@ -39,40 +42,74 @@ $base_url = "http://localhost/pet_care_system";
             align-items: center;
             gap: 12px;
             font-weight: 800;
-            font-size: 1.4rem;
+            font-size: 1.5rem;
             color: white !important;
             text-decoration: none;
+            transition: all 0.3s ease;
+        }
+        
+        .navbar-brand-modern:hover {
+            transform: scale(1.02);
+            color: white !important;
         }
         
         .brand-icon {
-            width: 40px;
-            height: 40px;
+            width: 45px;
+            height: 45px;
             background: rgba(255, 255, 255, 0.2);
             border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.2rem;
+            font-size: 1.3rem;
+            transition: all 0.3s ease;
+        }
+        
+        .navbar-brand-modern:hover .brand-icon {
+            background: rgba(255, 255, 255, 0.3);
+            transform: rotate(10deg);
         }
         
         .nav-link-modern {
             color: rgba(255, 255, 255, 0.9) !important;
             font-weight: 500;
-            padding: 8px 16px !important;
-            border-radius: 8px;
+            padding: 10px 18px !important;
+            border-radius: 10px;
             transition: all 0.3s ease;
             margin: 0 4px;
+            position: relative;
+            text-decoration: none;
+        }
+        
+        .nav-link-modern::before {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            width: 0;
+            height: 2px;
+            background: white;
+            transition: all 0.3s ease;
+            transform: translateX(-50%);
         }
         
         .nav-link-modern:hover {
             color: white !important;
-            background: rgba(255, 255, 255, 0.1);
-            transform: translateY(-1px);
+            background: rgba(255, 255, 255, 0.15);
+            transform: translateY(-2px);
+        }
+        
+        .nav-link-modern:hover::before {
+            width: 80%;
         }
         
         .nav-link-modern.active {
             background: rgba(255, 255, 255, 0.2);
             color: white !important;
+        }
+        
+        .nav-link-modern.active::before {
+            width: 80%;
         }
         
         .dropdown-menu-modern {
@@ -82,6 +119,21 @@ $base_url = "http://localhost/pet_care_system";
             border-radius: 12px;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
             padding: 8px;
+            z-index: 9999;
+            position: absolute;
+        }
+        
+        .navbar-nav .dropdown {
+            position: relative;
+            z-index: 1000;
+        }
+        
+        .navbar-nav .dropdown-menu {
+            z-index: 9999;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            margin-top: 8px;
         }
         
         .dropdown-item-modern {
