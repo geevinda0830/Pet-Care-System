@@ -131,7 +131,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_product'])) {
     // If no errors, update product in database
     if (empty($errors)) {
         $update_sql = "UPDATE pet_food_and_accessories 
-                       SET name = ?, brand = ?, category = ?, price = ?, weight = ?, stock = ?, description = ?, image = ?, updated_at = NOW()
+                       SET name = ?, brand = ?, category = ?, price = ?, weight = ?, stock = ?, description = ?, image = ?
                        WHERE productID = ?";
         
         $stmt = $conn->prepare($update_sql);
@@ -148,7 +148,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_product'])) {
         $stmt->close();
     }
     
-    // If there were errors, reload the product data
+    // If there were errors, reload the product data with submitted values
     if (!empty($errors)) {
         $product['name'] = $name;
         $product['brand'] = $brand;
@@ -241,21 +241,21 @@ include_once '../includes/header.php';
 
 .edit-product-content {
     padding: 80px 0;
-    background: #f8f9ff;
+    background: #f8f9fa;
 }
 
 .product-form-card {
     background: white;
-    border-radius: 24px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.12);
-    border: 1px solid rgba(0, 0, 0, 0.05);
+    border-radius: 20px;
+    box-shadow: 0 15px 35px rgba(0,0,0,0.1);
     overflow: hidden;
+    margin-bottom: 30px;
 }
 
 .form-header {
-    background: linear-gradient(135deg, #f8f9ff, #f1f5f9);
-    padding: 32px 40px;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    background: linear-gradient(135deg, #f8f9ff, #e8f4f8);
+    padding: 32px;
+    border-bottom: 1px solid #e5e7eb;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -265,15 +265,14 @@ include_once '../includes/header.php';
     color: #1e293b;
     font-weight: 700;
     margin: 0;
-    font-size: 1.5rem;
 }
 
 .product-id-badge {
-    background: linear-gradient(135deg, #667eea, #764ba2);
+    background: #667eea;
     color: white;
-    padding: 6px 12px;
+    padding: 8px 16px;
     border-radius: 20px;
-    font-size: 0.8rem;
+    font-size: 0.9rem;
     font-weight: 600;
 }
 
@@ -281,31 +280,37 @@ include_once '../includes/header.php';
     padding: 40px;
 }
 
+.form-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 24px;
+    margin-bottom: 24px;
+}
+
 .form-group {
     margin-bottom: 24px;
 }
 
 .form-label {
-    color: #374151;
-    font-weight: 600;
-    margin-bottom: 8px;
     display: block;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 8px;
     font-size: 0.95rem;
 }
 
-.form-label .required {
+.required {
     color: #ef4444;
-    margin-left: 4px;
 }
 
 .form-control-modern {
     width: 100%;
+    padding: 12px 16px;
     border: 2px solid #e5e7eb;
     border-radius: 12px;
-    padding: 14px 16px;
     font-size: 1rem;
     transition: all 0.3s ease;
-    background: #fff;
+    background: #ffffff;
 }
 
 .form-control-modern:focus {
@@ -316,12 +321,12 @@ include_once '../includes/header.php';
 
 .form-select-modern {
     width: 100%;
+    padding: 12px 16px;
     border: 2px solid #e5e7eb;
     border-radius: 12px;
-    padding: 14px 16px;
     font-size: 1rem;
     transition: all 0.3s ease;
-    background: #fff;
+    background: #ffffff;
     cursor: pointer;
 }
 
@@ -333,12 +338,12 @@ include_once '../includes/header.php';
 
 .form-textarea-modern {
     width: 100%;
+    padding: 12px 16px;
     border: 2px solid #e5e7eb;
     border-radius: 12px;
-    padding: 14px 16px;
     font-size: 1rem;
     transition: all 0.3s ease;
-    background: #fff;
+    background: #ffffff;
     resize: vertical;
     min-height: 120px;
 }
@@ -350,55 +355,52 @@ include_once '../includes/header.php';
 }
 
 .current-image-section {
-    background: #f8f9ff;
-    border-radius: 12px;
+    margin-bottom: 20px;
     padding: 20px;
-    margin-bottom: 16px;
-    text-align: center;
+    background: #f8f9fa;
+    border-radius: 12px;
 }
 
 .current-image {
     max-width: 200px;
     max-height: 200px;
-    border-radius: 12px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-    margin-bottom: 16px;
+    object-fit: contain;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    display: block;
 }
 
 .image-actions {
     display: flex;
-    gap: 12px;
-    justify-content: center;
+    gap: 10px;
 }
 
-.btn-remove-image {
-    background: #ef4444;
-    color: white;
-    border: none;
+.btn-change-image, .btn-remove-image {
     padding: 8px 16px;
     border-radius: 8px;
     font-size: 0.9rem;
+    font-weight: 600;
+    border: none;
     cursor: pointer;
     transition: all 0.3s ease;
-}
-
-.btn-remove-image:hover {
-    background: #dc2626;
 }
 
 .btn-change-image {
     background: #3b82f6;
     color: white;
-    border: none;
-    padding: 8px 16px;
-    border-radius: 8px;
-    font-size: 0.9rem;
-    cursor: pointer;
-    transition: all 0.3s ease;
 }
 
 .btn-change-image:hover {
     background: #2563eb;
+}
+
+.btn-remove-image {
+    background: #ef4444;
+    color: white;
+}
+
+.btn-remove-image:hover {
+    background: #dc2626;
 }
 
 .image-upload-area {
@@ -406,89 +408,19 @@ include_once '../includes/header.php';
     border-radius: 12px;
     padding: 40px 20px;
     text-align: center;
+    background: #fafafa;
     transition: all 0.3s ease;
-    cursor: pointer;
-    position: relative;
-    background: #f9fafb;
 }
 
 .image-upload-area:hover {
     border-color: #667eea;
-    background: #f8f9ff;
-}
-
-.image-upload-area.dragover {
-    border-color: #667eea;
     background: #f0f4ff;
-    transform: scale(1.02);
-}
-
-.upload-icon {
-    width: 60px;
-    height: 60px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, #667eea, #764ba2);
-    color: white;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0 auto 16px;
-    font-size: 1.5rem;
-}
-
-.upload-text {
-    color: #374151;
-    font-weight: 600;
-    margin-bottom: 8px;
-}
-
-.upload-hint {
-    color: #6b7280;
-    font-size: 0.9rem;
-}
-
-.file-input-hidden {
-    display: none;
-}
-
-.image-preview {
-    margin-top: 16px;
-    text-align: center;
-}
-
-.preview-image {
-    max-width: 200px;
-    max-height: 200px;
-    border-radius: 12px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-}
-
-.remove-preview {
-    background: #ef4444;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    padding: 6px 12px;
-    font-size: 0.8rem;
-    margin-top: 8px;
-    cursor: pointer;
-    transition: all 0.3s ease;
-}
-
-.remove-preview:hover {
-    background: #dc2626;
-}
-
-.form-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 24px;
 }
 
 .form-actions {
     display: flex;
     gap: 16px;
-    justify-content: center;
+    justify-content: flex-end;
     margin-top: 40px;
     padding-top: 32px;
     border-top: 1px solid #e5e7eb;
@@ -530,24 +462,6 @@ include_once '../includes/header.php';
     background: #e9ecef;
     color: #495057;
     border-color: #d1d5db;
-}
-
-.btn-danger-modern {
-    background: #ef4444;
-    color: white;
-    border: none;
-    padding: 12px 32px;
-    border-radius: 12px;
-    font-weight: 600;
-    font-size: 1rem;
-    transition: all 0.3s ease;
-    min-width: 160px;
-}
-
-.btn-danger-modern:hover {
-    background: #dc2626;
-    transform: translateY(-2px);
-    box-shadow: 0 10px 30px rgba(239, 68, 68, 0.3);
 }
 
 .alert-modern {
@@ -703,32 +617,33 @@ include_once '../includes/header.php';
                                         <option value="Medicine" <?php echo ($product['category'] === 'Medicine') ? 'selected' : ''; ?>>Medicine</option>
                                         <option value="Grooming" <?php echo ($product['category'] === 'Grooming') ? 'selected' : ''; ?>>Grooming</option>
                                     </select>
+                                    <div class="form-hint">Select the appropriate product category</div>
                                 </div>
                                 
                                 <div class="form-group">
-                                    <label class="form-label">Weight/Size <span class="required">*</span></label>
-                                    <input type="text" class="form-control-modern" name="weight" id="productWeight"
-                                           value="<?php echo htmlspecialchars($product['weight']); ?>" 
-                                           placeholder="e.g., 5kg, 500g, Large, Small" maxlength="20" required>
-                                    <div class="form-hint">Product weight or size specification</div>
+                                    <label class="form-label">Price (Rs.) <span class="required">*</span></label>
+                                    <input type="number" class="form-control-modern" name="price" id="productPrice"
+                                           value="<?php echo htmlspecialchars($product['price']); ?>" 
+                                           placeholder="0.00" step="0.01" min="0.01" required>
+                                    <div class="form-hint">Enter price in Sri Lankan Rupees</div>
                                 </div>
                             </div>
 
                             <div class="form-row">
                                 <div class="form-group">
-                                    <label class="form-label">Price (Rs.) <span class="required">*</span></label>
-                                    <input type="number" class="form-control-modern" name="price" id="productPrice"
-                                           value="<?php echo $product['price']; ?>" 
-                                           placeholder="Enter price" step="0.01" min="0" required>
-                                    <div class="form-hint">Product selling price in Sri Lankan Rupees</div>
+                                    <label class="form-label">Weight <span class="required">*</span></label>
+                                    <input type="text" class="form-control-modern" name="weight" id="productWeight"
+                                           value="<?php echo htmlspecialchars($product['weight']); ?>" 
+                                           placeholder="e.g., 1kg, 500g, 2.5kg" required>
+                                    <div class="form-hint">Include unit of measurement (kg, g, lbs, etc.)</div>
                                 </div>
                                 
                                 <div class="form-group">
                                     <label class="form-label">Stock Quantity <span class="required">*</span></label>
                                     <input type="number" class="form-control-modern" name="stock" id="productStock"
-                                           value="<?php echo $product['stock']; ?>" 
-                                           placeholder="Enter stock quantity" min="0" required>
-                                    <div class="form-hint">Number of units available in inventory</div>
+                                           value="<?php echo htmlspecialchars($product['stock']); ?>" 
+                                           placeholder="0" min="0" required>
+                                    <div class="form-hint">Available quantity in inventory</div>
                                 </div>
                             </div>
 
@@ -763,33 +678,29 @@ include_once '../includes/header.php';
                                 <?php endif; ?>
                                 
                                 <div class="image-upload-area" id="imageUploadArea" <?php echo !empty($product['image']) ? 'style="display: none;"' : ''; ?>>
-                                    <div class="upload-icon">
-                                        <i class="fas fa-cloud-upload-alt"></i>
+                                    <i class="fas fa-cloud-upload-alt" style="font-size: 3rem; color: #cbd5e0; margin-bottom: 16px;"></i>
+                                    <h5 style="color: #4a5568; margin-bottom: 8px;">Upload Product Image</h5>
+                                    <p style="color: #718096; margin-bottom: 16px;">Drag and drop or click to select</p>
+                                    <input type="file" name="image" id="imageInput" accept="image/*" style="display: none;">
+                                    <button type="button" class="btn-primary-modern" onclick="document.getElementById('imageInput').click();">
+                                        <i class="fas fa-upload me-2"></i>Choose Image
+                                    </button>
+                                    <div class="form-hint" style="margin-top: 12px;">
+                                        Supported formats: JPG, PNG, GIF. Maximum size: 5MB
                                     </div>
-                                    <div class="upload-text">Click to upload or drag and drop</div>
-                                    <div class="upload-hint">JPEG, PNG, GIF up to 5MB</div>
-                                    <input type="file" class="file-input-hidden" name="image" id="imageInput" accept="image/*">
                                 </div>
                                 
-                                <div class="image-preview" id="imagePreview" style="display: none;">
-                                    <img id="previewImg" class="preview-image" alt="Preview">
-                                    <br>
-                                    <button type="button" class="remove-preview" id="removePreview">Remove Preview</button>
-                                </div>
-                                
-                                <input type="hidden" name="remove_image" id="removeImageInput" value="0">
+                                <!-- Hidden input for remove image flag -->
+                                <input type="hidden" name="remove_image" id="removeImageFlag" value="0">
                             </div>
 
                             <!-- Form Actions -->
                             <div class="form-actions">
-                                <button type="submit" name="update_product" class="btn-primary-modern">
-                                    <i class="fas fa-save me-2"></i>Update Product
-                                </button>
                                 <a href="manage_products.php" class="btn-secondary-modern">
                                     <i class="fas fa-times me-2"></i>Cancel
                                 </a>
-                                <button type="button" class="btn-danger-modern" onclick="deleteProduct(<?php echo $product_id; ?>)">
-                                    <i class="fas fa-trash me-2"></i>Delete Product
+                                <button type="submit" name="update_product" class="btn-primary-modern">
+                                    <i class="fas fa-save me-2"></i>Update Product
                                 </button>
                             </div>
                         </form>
@@ -800,201 +711,93 @@ include_once '../includes/header.php';
     </div>
 </section>
 
-<?php include_once '../includes/footer.php'; ?>
-
 <script>
+// Character count for description
+document.getElementById('productDescription').addEventListener('input', function() {
+    const count = this.value.length;
+    document.getElementById('descriptionCount').textContent = count;
+    
+    if (count > 1000) {
+        this.value = this.value.substring(0, 1000);
+        document.getElementById('descriptionCount').textContent = 1000;
+    }
+});
+
+// Initialize character count
 document.addEventListener('DOMContentLoaded', function() {
-    // Character counter for description
     const description = document.getElementById('productDescription');
-    const counter = document.getElementById('descriptionCount');
-    
-    function updateCounter() {
-        counter.textContent = description.value.length;
-        if (description.value.length > 900) {
-            counter.style.color = '#ef4444';
-        } else {
-            counter.style.color = '#6b7280';
+    document.getElementById('descriptionCount').textContent = description.value.length;
+});
+
+// Image management functions
+document.getElementById('changeImageBtn')?.addEventListener('click', function() {
+    document.getElementById('imageUploadArea').style.display = 'block';
+    document.getElementById('imageInput').click();
+});
+
+document.getElementById('removeImageBtn')?.addEventListener('click', function() {
+    if (confirm('Are you sure you want to remove the current image?')) {
+        document.getElementById('currentImageSection').style.display = 'none';
+        document.getElementById('imageUploadArea').style.display = 'block';
+        document.getElementById('removeImageFlag').value = '1';
+    }
+});
+
+// Image preview functionality
+document.getElementById('imageInput').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (file) {
+        // Validate file size (5MB)
+        if (file.size > 5 * 1024 * 1024) {
+            alert('File size must be less than 5MB');
+            this.value = '';
+            return;
         }
-    }
-    
-    description.addEventListener('input', updateCounter);
-    updateCounter(); // Initialize counter
-    
-    // Image management
-    const currentImageSection = document.getElementById('currentImageSection');
-    const imageUploadArea = document.getElementById('imageUploadArea');
-    const imageInput = document.getElementById('imageInput');
-    const imagePreview = document.getElementById('imagePreview');
-    const previewImg = document.getElementById('previewImg');
-    const removeImageInput = document.getElementById('removeImageInput');
-    const changeImageBtn = document.getElementById('changeImageBtn');
-    const removeImageBtn = document.getElementById('removeImageBtn');
-    const removePreview = document.getElementById('removePreview');
-    
-    // Change image button
-    if (changeImageBtn) {
-        changeImageBtn.addEventListener('click', function() {
-            imageUploadArea.style.display = 'block';
-            currentImageSection.style.display = 'none';
-        });
-    }
-    
-    // Remove image button
-    if (removeImageBtn) {
-        removeImageBtn.addEventListener('click', function() {
-            if (confirm('Are you sure you want to remove the current image?')) {
-                removeImageInput.value = '1';
-                currentImageSection.style.display = 'none';
-                imageUploadArea.style.display = 'block';
-            }
-        });
-    }
-    
-    // Click to upload
-    imageUploadArea.addEventListener('click', function() {
-        imageInput.click();
-    });
-    
-    // Drag and drop functionality
-    imageUploadArea.addEventListener('dragover', function(e) {
-        e.preventDefault();
-        imageUploadArea.classList.add('dragover');
-    });
-    
-    imageUploadArea.addEventListener('dragleave', function(e) {
-        e.preventDefault();
-        imageUploadArea.classList.remove('dragover');
-    });
-    
-    imageUploadArea.addEventListener('drop', function(e) {
-        e.preventDefault();
-        imageUploadArea.classList.remove('dragover');
         
-        const files = e.dataTransfer.files;
-        if (files.length > 0) {
-            imageInput.files = files;
-            handleImageSelect(files[0]);
-        }
-    });
-    
-    // Handle image selection
-    imageInput.addEventListener('change', function(e) {
-        if (e.target.files.length > 0) {
-            handleImageSelect(e.target.files[0]);
-        }
-    });
-    
-    // Remove preview
-    if (removePreview) {
-        removePreview.addEventListener('click', function() {
-            imageInput.value = '';
-            imagePreview.style.display = 'none';
-            imageUploadArea.style.display = 'block';
-            removeImageInput.value = '0';
-        });
-    }
-    
-    function handleImageSelect(file) {
         // Validate file type
         const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
         if (!allowedTypes.includes(file.type)) {
-            alert('Please select a valid image file (JPEG, PNG, or GIF).');
+            alert('Only JPEG, PNG, and GIF images are allowed');
+            this.value = '';
             return;
         }
         
-        // Validate file size (5MB)
-        if (file.size > 5 * 1024 * 1024) {
-            alert('Image file size must be less than 5MB.');
-            return;
-        }
-        
-        // Show preview
+        // Show preview (optional)
         const reader = new FileReader();
         reader.onload = function(e) {
-            previewImg.src = e.target.result;
-            imagePreview.style.display = 'block';
-            imageUploadArea.style.display = 'none';
-            removeImageInput.value = '0';
+            // You can add image preview functionality here if needed
+            console.log('Image selected:', file.name);
         };
         reader.readAsDataURL(file);
     }
-    
-    // Form validation
-    const form = document.getElementById('editProductForm');
-    form.addEventListener('submit', function(e) {
-        let isValid = true;
-        
-        // Check required fields
-        const requiredFields = ['productName', 'productBrand', 'productPrice', 'productStock', 'productDescription'];
-        requiredFields.forEach(fieldId => {
-            const field = document.getElementById(fieldId);
-            if (!field.value.trim()) {
-                field.style.borderColor = '#ef4444';
-                isValid = false;
-            } else {
-                field.style.borderColor = '#e5e7eb';
-            }
-        });
-        
-        // Validate price
-        const price = document.getElementById('productPrice');
-        if (parseFloat(price.value) <= 0) {
-            price.style.borderColor = '#ef4444';
-            alert('Price must be greater than 0.');
-            isValid = false;
-        }
-        
-        // Validate stock
-        const stock = document.getElementById('productStock');
-        if (parseInt(stock.value) < 0) {
-            stock.style.borderColor = '#ef4444';
-            alert('Stock quantity cannot be negative.');
-            isValid = false;
-        }
-        
-        if (!isValid) {
-            e.preventDefault();
-        }
-    });
-    
-    // Real-time validation
-    document.querySelectorAll('.form-control-modern, .form-select-modern, .form-textarea-modern').forEach(field => {
-        field.addEventListener('blur', function() {
-            if (this.hasAttribute('required') && !this.value.trim()) {
-                this.style.borderColor = '#ef4444';
-            } else {
-                this.style.borderColor = '#e5e7eb';
-            }
-        });
-        
-        field.addEventListener('focus', function() {
-            this.style.borderColor = '#667eea';
-        });
-    });
 });
 
-// Delete product function
-function deleteProduct(productId) {
-    if (confirm('Are you sure you want to delete this product? This action cannot be undone.')) {
-        // Create a form to submit delete request
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = 'manage_products.php';
-        
-        const deleteInput = document.createElement('input');
-        deleteInput.type = 'hidden';
-        deleteInput.name = 'delete_product';
-        deleteInput.value = '1';
-        
-        const idInput = document.createElement('input');
-        idInput.type = 'hidden';
-        idInput.name = 'product_id';
-        idInput.value = productId;
-        
-        form.appendChild(deleteInput);
-        form.appendChild(idInput);
-        document.body.appendChild(form);
-        form.submit();
+// Form validation
+document.getElementById('editProductForm').addEventListener('submit', function(e) {
+    const requiredFields = ['name', 'brand', 'category', 'price', 'weight', 'stock', 'description'];
+    let isValid = true;
+    
+    requiredFields.forEach(function(field) {
+        const input = document.getElementsByName(field)[0];
+        if (!input.value.trim()) {
+            isValid = false;
+            input.style.borderColor = '#ef4444';
+        } else {
+            input.style.borderColor = '#e5e7eb';
+        }
+    });
+    
+    if (!isValid) {
+        e.preventDefault();
+        alert('Please fill all required fields');
     }
-}
+});
 </script>
+
+<?php
+// Include footer
+include_once '../includes/footer.php';
+
+// Close database connection
+$conn->close();
+?>
