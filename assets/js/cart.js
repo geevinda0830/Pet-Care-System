@@ -1,11 +1,27 @@
 /**
- * Complete Add to Cart Functionality
- * This script should be included in all pages that need cart functionality
+ * Enhanced Cart Management System
+ * Handles all cart operations with improved error handling and user feedback
  */
 
-// Global cart functions
+// Global cart manager object
 window.CartManager = {
     
+    /**
+     * Initialize cart functionality
+     */
+    init: function() {
+        this.updateCartCount();
+        this.bindEvents();
+        console.log('CartManager initialized');
+    },
+
+    /**
+     * Check if user is logged in
+     */
+    isUserLoggedIn: function() {
+        return window.userLoggedIn === true;
+    },
+
     /**
      * Add item to cart - Universal function for all pages
      * @param {number} productId - The product ID to add
@@ -13,14 +29,20 @@ window.CartManager = {
      * @param {HTMLElement} buttonElement - The button that was clicked (optional)
      */
     addToCart: function(productId, quantity = 1, buttonElement = null) {
-        // Check if user is logged in (check both possible session variables)
-        const isLoggedIn = document.body.dataset.userLoggedIn === 'true';
+        console.log('CartManager.addToCart called:', { productId, quantity, buttonElement });
         
-        if (!isLoggedIn) {
+        // Check if user is logged in
+        if (!this.isUserLoggedIn()) {
             this.showMessage('Please login to add items to cart', 'error');
             setTimeout(() => {
                 window.location.href = 'login.php';
             }, 2000);
+            return;
+        }
+
+        // Validate inputs
+        if (!productId || productId <= 0) {
+            this.showMessage('Invalid product selected', 'error');
             return;
         }
 
@@ -32,6 +54,9 @@ window.CartManager = {
             }
         }
 
+        // Ensure minimum quantity
+        quantity = Math.max(1, parseInt(quantity));
+
         // Handle button loading state
         let originalButtonHTML = '';
         if (buttonElement) {
@@ -40,15 +65,23 @@ window.CartManager = {
             buttonElement.disabled = true;
         } else {
             // Try to find the button by event target
-            if (event && event.target) {
-                buttonElement = event.target.closest('button') || event.target;
-                if (buttonElement) {
+            if (window.event && window.event.target) {
+                buttonElement = window.event.target.closest('button') || window.event.target;
+                if (buttonElement && buttonElement.tagName === 'BUTTON') {
                     originalButtonHTML = buttonElement.innerHTML;
                     buttonElement.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
                     buttonElement.disabled = true;
                 }
             }
         }
+
+        // Reset button function
+        const resetButton = () => {
+            if (buttonElement && originalButtonHTML) {
+                buttonElement.innerHTML = originalButtonHTML;
+                buttonElement.disabled = false;
+            }
+        };
 
         // Create form data
         const formData = new FormData();
@@ -59,47 +92,118 @@ window.CartManager = {
         // Send request to cart_process.php
         fetch('cart_process.php', {
             method: 'POST',
-            body: formData
+            body: formData,
+            credentials: 'same-origin'
         })
         .then(response => {
+            console.log('Response status:', response.status);
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
-            return response.json();
+            return response.text();
         })
-        .then(data => {
-            if (data.success) {
-                this.showMessage(data.message || 'Product added to cart successfully!', 'success');
+        .then(text => {
+            console.log('Raw response:', text);
+            try {
+                const data = JSON.parse(text);
+                console.log('Parsed response:', data);
                 
-                // Update cart count in header if element exists
-                this.updateCartCount(data.cart_count);
-                
-                // Update cart total if on cart page
-                if (data.cart_total !== undefined) {
-                    this.updateCartTotal(data.cart_total);
+                if (data.success) {
+                    this.showMessage(data.message || 'Product added to cart successfully!', 'success');
+                    this.updateCartCount();
+                    
+                    // Trigger custom event for other scripts
+                    this.triggerCartUpdate(data);
+                    
+                } else {
+                    this.showMessage(data.message || 'Failed to add product to cart', 'error');
+                    
+                    // Handle redirect if needed
+                    if (data.redirect) {
+                        setTimeout(() => {
+                            window.location.href = data.redirect;
+                        }, 2000);
+                    }
                 }
-                
-                // Trigger custom event for other components
-                window.dispatchEvent(new CustomEvent('cartUpdated', { 
-                    detail: { 
-                        action: 'add', 
-                        productId: productId, 
-                        quantity: quantity,
-                        cartCount: data.cart_count,
-                        cartTotal: data.cart_total
-                    } 
-                }));
-                
-            } else {
-                this.showMessage(data.message || 'Failed to add product to cart', 'error');
+            } catch (parseError) {
+                console.error('JSON parse error:', parseError);
+                console.error('Raw text:', text);
+                this.showMessage('Server response error. Please try again.', 'error');
             }
         })
         .catch(error => {
-            console.error('Add to cart error:', error);
-            this.showMessage('An error occurred while adding the product to cart. Please try again.', 'error');
+            console.error('Fetch error:', error);
+            this.showMessage('Network error. Please check your connection and try again.', 'error');
         })
         .finally(() => {
-            // Restore button state
+            resetButton();
+        });
+    },
+
+    /**
+     * Remove item from cart
+     * @param {number} cartItemId - The cart item ID to remove
+     * @param {HTMLElement} buttonElement - The button that was clicked (optional)
+     */
+    removeFromCart: function(cartItemId, buttonElement = null) {
+        if (!this.isUserLoggedIn()) {
+            this.showMessage('Please login to manage your cart', 'error');
+            return;
+        }
+
+        if (!cartItemId || cartItemId <= 0) {
+            this.showMessage('Invalid item selected', 'error');
+            return;
+        }
+
+        // Handle button loading state
+        let originalButtonHTML = '';
+        if (buttonElement) {
+            originalButtonHTML = buttonElement.innerHTML;
+            buttonElement.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            buttonElement.disabled = true;
+        }
+
+        const formData = new FormData();
+        formData.append('action', 'remove');
+        formData.append('cart_item_id', cartItemId);
+
+        fetch('cart_process.php', {
+            method: 'POST',
+            body: formData,
+            credentials: 'same-origin'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                this.showMessage(data.message || 'Item removed from cart', 'success');
+                this.updateCartCount();
+                
+                // Remove the item from the page
+                const itemElement = buttonElement ? buttonElement.closest('.cart-item, .cart-item-modern') : null;
+                if (itemElement) {
+                    itemElement.style.transition = 'opacity 0.3s ease';
+                    itemElement.style.opacity = '0';
+                    setTimeout(() => {
+                        itemElement.remove();
+                        this.checkEmptyCart();
+                    }, 300);
+                } else {
+                    // Reload the page if we can't find the item element
+                    setTimeout(() => location.reload(), 1000);
+                }
+                
+                this.triggerCartUpdate(data);
+                
+            } else {
+                this.showMessage(data.message || 'Failed to remove item', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Remove from cart error:', error);
+            this.showMessage('Error removing item. Please try again.', 'error');
+        })
+        .finally(() => {
             if (buttonElement && originalButtonHTML) {
                 buttonElement.innerHTML = originalButtonHTML;
                 buttonElement.disabled = false;
@@ -108,297 +212,329 @@ window.CartManager = {
     },
 
     /**
-     * Remove item from cart
-     * @param {number} cartItemId - The cart item ID to remove
-     */
-    removeFromCart: function(cartItemId) {
-        if (!confirm('Are you sure you want to remove this item from your cart?')) {
-            return;
-        }
-
-        // Create form data
-        const formData = new FormData();
-        formData.append('action', 'remove');
-        formData.append('cart_item_id', cartItemId);
-
-        // Send request
-        fetch('cart_process.php', {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                this.showMessage(data.message || 'Item removed from cart', 'success');
-                
-                // Reload page if on cart page, otherwise update count
-                if (window.location.pathname.includes('cart.php')) {
-                    location.reload();
-                } else {
-                    this.updateCartCount(data.cart_count);
-                }
-                
-                // Trigger custom event
-                window.dispatchEvent(new CustomEvent('cartUpdated', { 
-                    detail: { 
-                        action: 'remove', 
-                        cartItemId: cartItemId,
-                        cartCount: data.cart_count 
-                    } 
-                }));
-                
-            } else {
-                this.showMessage(data.message || 'Failed to remove item from cart', 'error');
-            }
-        })
-        .catch(error => {
-            console.error('Remove from cart error:', error);
-            this.showMessage('An error occurred while removing the item. Please try again.', 'error');
-        });
-    },
-
-    /**
-     * Update cart item quantity
+     * Update item quantity in cart
      * @param {number} cartItemId - The cart item ID
-     * @param {number} newQuantity - The new quantity
+     * @param {number} quantity - New quantity
+     * @param {HTMLElement} inputElement - The input element (optional)
      */
-    updateQuantity: function(cartItemId, newQuantity) {
-        if (newQuantity < 1) {
-            this.removeFromCart(cartItemId);
+    updateQuantity: function(cartItemId, quantity, inputElement = null) {
+        if (!this.isUserLoggedIn()) {
+            this.showMessage('Please login to manage your cart', 'error');
             return;
         }
 
-        // Create form data
+        quantity = Math.max(1, parseInt(quantity));
+
         const formData = new FormData();
         formData.append('action', 'update');
         formData.append('cart_item_id', cartItemId);
-        formData.append('quantity', newQuantity);
+        formData.append('quantity', quantity);
 
-        // Send request
         fetch('cart_process.php', {
             method: 'POST',
-            body: formData
+            body: formData,
+            credentials: 'same-origin'
         })
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                // Update cart count and total
-                this.updateCartCount(data.cart_count);
-                this.updateCartTotal(data.cart_total);
+                this.updateCartCount();
+                this.triggerCartUpdate(data);
                 
-                // Trigger custom event
-                window.dispatchEvent(new CustomEvent('cartUpdated', { 
-                    detail: { 
-                        action: 'update', 
-                        cartItemId: cartItemId,
-                        quantity: newQuantity,
-                        cartCount: data.cart_count,
-                        cartTotal: data.cart_total
-                    } 
-                }));
+                // Update the item total if element exists
+                const itemElement = inputElement ? inputElement.closest('.cart-item, .cart-item-modern') : null;
+                if (itemElement) {
+                    const totalElement = itemElement.querySelector('.item-total, .total-price');
+                    if (totalElement && data.item_total) {
+                        totalElement.textContent = '₱' + parseFloat(data.item_total).toFixed(2);
+                    }
+                }
                 
             } else {
                 this.showMessage(data.message || 'Failed to update quantity', 'error');
-                // Reload page to reset quantity
-                location.reload();
+                // Reset input to original value if available
+                if (inputElement && data.original_quantity) {
+                    inputElement.value = data.original_quantity;
+                }
             }
         })
         .catch(error => {
             console.error('Update quantity error:', error);
-            this.showMessage('An error occurred while updating quantity', 'error');
-            location.reload();
+            this.showMessage('Error updating quantity. Please try again.', 'error');
+        });
+    },
+
+    /**
+     * Clear entire cart
+     */
+    clearCart: function() {
+        if (!this.isUserLoggedIn()) {
+            this.showMessage('Please login to manage your cart', 'error');
+            return;
+        }
+
+        if (!confirm('Are you sure you want to clear all items from your cart?')) {
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('action', 'clear');
+
+        fetch('cart_process.php', {
+            method: 'POST',
+            body: formData,
+            credentials: 'same-origin'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                this.showMessage(data.message || 'Cart cleared successfully', 'success');
+                this.updateCartCount();
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                this.showMessage(data.message || 'Failed to clear cart', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Clear cart error:', error);
+            this.showMessage('Error clearing cart. Please try again.', 'error');
         });
     },
 
     /**
      * Update cart count display
-     * @param {number} count - New cart count
      */
-    updateCartCount: function(count) {
-        const cartCountElements = document.querySelectorAll('.cart-count, [data-cart-count]');
-        cartCountElements.forEach(element => {
-            element.textContent = count || '0';
+    updateCartCount: function() {
+        if (!this.isUserLoggedIn()) {
+            return;
+        }
+
+        fetch('get_cart_count.php', {
+            credentials: 'same-origin'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && typeof data.count !== 'undefined') {
+                this.updateCartCountElements(data.count);
+            }
+        })
+        .catch(error => {
+            console.error('Error updating cart count:', error);
         });
     },
 
     /**
-     * Update cart total display
-     * @param {number} total - New cart total
+     * Update all cart count elements on the page
+     * @param {number} count - Cart item count
      */
-    updateCartTotal: function(total) {
-        const cartTotalElements = document.querySelectorAll('.cart-total, [data-cart-total]');
-        cartTotalElements.forEach(element => {
-            element.textContent = `Rs.${parseFloat(total || 0).toFixed(2)}`;
+    updateCartCountElements: function(count) {
+        const cartCountSelectors = [
+            '.cart-count',
+            '#cart-count',
+            '.cart-badge',
+            '[data-cart-count]',
+            '.badge-cart'
+        ];
+
+        cartCountSelectors.forEach(selector => {
+            const elements = document.querySelectorAll(selector);
+            elements.forEach(element => {
+                element.textContent = count;
+                element.style.display = count > 0 ? 'inline' : 'none';
+                
+                // Add animation for count change
+                element.style.transform = 'scale(1.2)';
+                setTimeout(() => {
+                    element.style.transform = 'scale(1)';
+                }, 200);
+            });
         });
     },
 
     /**
-     * Show message to user
-     * @param {string} message - Message to show
-     * @param {string} type - Type of message ('success', 'error', 'warning', 'info')
+     * Enhanced message display function
+     * @param {string} message - Message to display
+     * @param {string} type - Message type (success, error, info)
      */
     showMessage: function(message, type = 'info') {
         // Remove existing messages
-        const existingMessages = document.querySelectorAll('.cart-message-toast');
+        const existingMessages = document.querySelectorAll('.cart-message, .message');
         existingMessages.forEach(msg => msg.remove());
 
-        // Create message element
-        const messageDiv = document.createElement('div');
-        messageDiv.className = `cart-message-toast`;
+        // Create new message element
+        const messageElement = document.createElement('div');
+        messageElement.className = `message cart-message ${type}`;
         
-        // Set styles based on type
-        const styles = {
-            success: { bg: '#d4edda', color: '#155724', border: '#c3e6cb', icon: 'check-circle' },
-            error: { bg: '#f8d7da', color: '#721c24', border: '#f5c6cb', icon: 'exclamation-circle' },
-            warning: { bg: '#fff3cd', color: '#856404', border: '#ffeaa7', icon: 'exclamation-triangle' },
-            info: { bg: '#d1ecf1', color: '#0c5460', border: '#bee5eb', icon: 'info-circle' }
-        };
+        const iconClass = type === 'success' ? 'fa-check-circle' : 
+                         type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle';
         
-        const style = styles[type] || styles.info;
-        
-        messageDiv.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 9999;
-            min-width: 320px;
-            max-width: 500px;
-            padding: 16px 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            background: ${style.bg};
-            color: ${style.color};
-            border: 1px solid ${style.border};
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            font-size: 14px;
-            line-height: 1.4;
-            animation: slideInRight 0.3s ease-out;
-        `;
-        
-        messageDiv.innerHTML = `
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <i class="fas fa-${style.icon}" style="flex-shrink: 0;"></i>
-                <span style="flex: 1;">${message}</span>
-                <button onclick="this.parentElement.parentElement.remove()" 
-                        style="background: none; border: none; color: inherit; cursor: pointer; font-size: 16px; padding: 0; margin-left: 10px;">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
+        messageElement.innerHTML = `
+            <i class="fas ${iconClass}"></i>
+            <span>${message}</span>
+            <button class="message-close" onclick="this.parentElement.remove()">
+                <i class="fas fa-times"></i>
+            </button>
         `;
 
-        // Add animation styles
+        // Add styles if not already present
         if (!document.querySelector('#cart-message-styles')) {
-            const styleSheet = document.createElement('style');
-            styleSheet.id = 'cart-message-styles';
-            styleSheet.textContent = `
-                @keyframes slideInRight {
-                    from { transform: translateX(100%); opacity: 0; }
-                    to { transform: translateX(0); opacity: 1; }
+            const styles = document.createElement('style');
+            styles.id = 'cart-message-styles';
+            styles.textContent = `
+                .message {
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    padding: 15px 25px;
+                    border-radius: 8px;
+                    color: white;
+                    font-weight: 600;
+                    z-index: 1000;
+                    transform: translateX(400px);
+                    transition: transform 0.3s ease;
+                    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    max-width: 400px;
                 }
-                @keyframes slideOutRight {
-                    from { transform: translateX(0); opacity: 1; }
-                    to { transform: translateX(100%); opacity: 0; }
+                .message.show { transform: translateX(0); }
+                .message.success { background: #10b981; }
+                .message.error { background: #ef4444; }
+                .message.info { background: #3b82f6; }
+                .message-close {
+                    background: none;
+                    border: none;
+                    color: white;
+                    cursor: pointer;
+                    font-size: 14px;
+                    margin-left: auto;
+                    opacity: 0.8;
                 }
+                .message-close:hover { opacity: 1; }
             `;
-            document.head.appendChild(styleSheet);
+            document.head.appendChild(styles);
         }
 
         // Add to page
-        document.body.appendChild(messageDiv);
+        document.body.appendChild(messageElement);
 
-        // Auto remove after 5 seconds
+        // Show message with animation
         setTimeout(() => {
-            if (messageDiv.parentNode) {
-                messageDiv.style.animation = 'slideOutRight 0.3s ease-in';
+            messageElement.classList.add('show');
+        }, 100);
+
+        // Auto-hide after 5 seconds
+        setTimeout(() => {
+            if (messageElement.parentNode) {
+                messageElement.classList.remove('show');
                 setTimeout(() => {
-                    if (messageDiv.parentNode) {
-                        messageDiv.remove();
+                    if (messageElement.parentNode) {
+                        messageElement.remove();
                     }
                 }, 300);
             }
         }, 5000);
+    },
+
+    /**
+     * Check if cart is empty and show appropriate message
+     */
+    checkEmptyCart: function() {
+        const cartItems = document.querySelectorAll('.cart-item, .cart-item-modern');
+        if (cartItems.length === 0) {
+            const cartContainer = document.querySelector('.cart-items, .cart-container');
+            if (cartContainer) {
+                cartContainer.innerHTML = `
+                    <div class="empty-cart">
+                        <i class="fas fa-shopping-cart"></i>
+                        <h3>Your cart is empty</h3>
+                        <p>Add some products to get started!</p>
+                        <a href="shop.php" class="btn btn-primary">Continue Shopping</a>
+                    </div>
+                `;
+            }
+        }
+    },
+
+    /**
+     * Trigger custom cart update event
+     * @param {object} data - Response data from server
+     */
+    triggerCartUpdate: function(data) {
+        const event = new CustomEvent('cartUpdated', {
+            detail: data
+        });
+        document.dispatchEvent(event);
+    },
+
+    /**
+     * Bind event listeners
+     */
+    bindEvents: function() {
+        // Bind quantity input changes
+        document.addEventListener('change', (e) => {
+            if (e.target.classList.contains('quantity-input')) {
+                const cartItemId = e.target.dataset.cartItemId;
+                const quantity = e.target.value;
+                if (cartItemId) {
+                    this.updateQuantity(cartItemId, quantity, e.target);
+                }
+            }
+        });
+
+        // Bind remove buttons
+        document.addEventListener('click', (e) => {
+            if (e.target.classList.contains('btn-remove-item') || 
+                e.target.closest('.btn-remove-item')) {
+                e.preventDefault();
+                const button = e.target.classList.contains('btn-remove-item') ? 
+                              e.target : e.target.closest('.btn-remove-item');
+                const cartItemId = button.dataset.cartItemId;
+                if (cartItemId) {
+                    this.removeFromCart(cartItemId, button);
+                }
+            }
+        });
+
+        // Listen for cart update events
+        document.addEventListener('cartUpdated', (e) => {
+            console.log('Cart updated:', e.detail);
+        });
     }
 };
 
-// Backward compatibility - Global functions
-function addToCart(productId, quantity, buttonElement) {
-    return CartManager.addToCart(productId, quantity, buttonElement);
-}
+// Global functions for backward compatibility
+window.addToCart = function(productId, buttonElement) {
+    return CartManager.addToCart(productId, 1, buttonElement);
+};
 
-function removeFromCart(cartItemId) {
-    return CartManager.removeFromCart(cartItemId);
-}
+window.removeFromCart = function(cartItemId, buttonElement) {
+    return CartManager.removeFromCart(cartItemId, buttonElement);
+};
 
-function updateCartQuantity(cartItemId, newQuantity) {
-    return CartManager.updateQuantity(cartItemId, newQuantity);
-}
+window.updateCartQuantity = function(cartItemId, quantity, inputElement) {
+    return CartManager.updateQuantity(cartItemId, quantity, inputElement);
+};
 
-function showMessage(message, type) {
-    return CartManager.showMessage(message, type);
-}
+window.clearCart = function() {
+    return CartManager.clearCart();
+};
 
-// Quantity control functions for product details page
-function decreaseQty() {
-    const input = document.getElementById('quantity');
-    if (input) {
-        const current = parseInt(input.value) || 1;
-        if (current > 1) {
-            input.value = current - 1;
-        }
-    }
-}
+window.updateCartCount = function() {
+    return CartManager.updateCartCount();
+};
 
-function increaseQty() {
-    const input = document.getElementById('quantity');
-    if (input) {
-        const max = parseInt(input.getAttribute('max')) || 999;
-        const current = parseInt(input.value) || 1;
-        if (current < max) {
-            input.value = current + 1;
-        }
-    }
-}
-
-// Quantity input validation
+// Initialize cart manager when DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
-    const quantityInput = document.getElementById('quantity');
-    if (quantityInput) {
-        quantityInput.addEventListener('change', function() {
-            const value = parseInt(this.value) || 1;
-            const max = parseInt(this.getAttribute('max')) || 999;
-            const min = parseInt(this.getAttribute('min')) || 1;
-            
-            if (value > max) this.value = max;
-            if (value < min) this.value = min;
-        });
-    }
-    
-    // Add change quantity buttons functionality for cart page
-    const quantityButtons = document.querySelectorAll('.quantity-btn');
-    quantityButtons.forEach(button => {
-        button.addEventListener('click', function() {
-            const input = this.closest('.quantity-controls').querySelector('.quantity-input');
-            const cartItemId = input.dataset.cartItemId;
-            const change = parseInt(this.dataset.change);
-            const currentValue = parseInt(input.value) || 1;
-            const newValue = Math.max(1, currentValue + change);
-            const maxValue = parseInt(input.getAttribute('max')) || 999;
-            
-            if (newValue <= maxValue) {
-                input.value = newValue;
-                CartManager.updateQuantity(cartItemId, newValue);
-            }
-        });
+    CartManager.init();
+});
+
+// Initialize cart manager immediately if DOM is already loaded
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() {
+        CartManager.init();
     });
-});
-
-// Initialize cart functionality when page loads
-document.addEventListener('DOMContentLoaded', function() {
-    // Check if user is logged in and store in dataset for easy access
-    const userLoggedIn = document.querySelector('meta[name="user-logged-in"]');
-    if (userLoggedIn) {
-        document.body.dataset.userLoggedIn = userLoggedIn.content;
-    }
-    
-    console.log('Cart Manager initialized successfully');
-});
+} else {
+    CartManager.init();
+}

@@ -763,7 +763,9 @@ include_once 'includes/header.php';
 </section>
 
 <script>
-// Add to cart function with fallback
+// Complete JavaScript section for shop.php
+// Replace the entire <script> section in your shop.php with this code
+
 function addToCart(productId) {
     <?php if (isset($_SESSION['user_id']) || isset($_SESSION['userID'])): ?>
         // Show loading state
@@ -772,7 +774,7 @@ function addToCart(productId) {
         button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
         button.disabled = true;
         
-        // First, try the main cart_process.php
+        // Create form data
         const formData = new FormData();
         formData.append('product_id', productId);
         formData.append('quantity', 1);
@@ -788,47 +790,33 @@ function addToCart(productId) {
                 showMessage('Product added to cart successfully!', 'success');
                 
                 // Update cart count if element exists
-                const cartCountElement = document.querySelector('.cart-count');
-                if (cartCountElement && data.cart_count) {
-                    cartCountElement.textContent = data.cart_count;
+                const cartCount = document.querySelector('.cart-count');
+                if (cartCount && data.cart_count) {
+                    cartCount.textContent = data.cart_count;
+                    cartCount.style.display = data.cart_count > 0 ? 'inline' : 'none';
                 }
+                
+                // Also try other possible cart count elements
+                const cartBadge = document.querySelector('.cart-badge');
+                if (cartBadge && data.cart_count) {
+                    cartBadge.textContent = data.cart_count;
+                }
+                
+                const cartCountId = document.getElementById('cart-count');
+                if (cartCountId && data.cart_count) {
+                    cartCountId.textContent = data.cart_count;
+                }
+                
             } else {
                 showMessage(data.message || 'Failed to add product to cart', 'error');
             }
         })
         .catch(error => {
-            console.error('Primary cart method failed, trying backup...', error);
-            
-            // Fallback to backup ajax method
-            const backupFormData = new FormData();
-            backupFormData.append('product_id', productId);
-            backupFormData.append('quantity', 1);
-            
-            fetch('ajax/add_to_cart.php', {
-                method: 'POST',
-                body: backupFormData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    showMessage('Product added to cart successfully!', 'success');
-                    
-                    // Update cart count if element exists
-                    const cartCountElement = document.querySelector('.cart-count');
-                    if (cartCountElement && data.cart_count) {
-                        cartCountElement.textContent = data.cart_count;
-                    }
-                } else {
-                    showMessage(data.message || 'Failed to add product to cart', 'error');
-                }
-            })
-            .catch(backupError => {
-                console.error('Both cart methods failed:', backupError);
-                showMessage('Unable to add product to cart. Please try again later.', 'error');
-            });
+            console.error('Error:', error);
+            showMessage('Network error. Please try again.', 'error');
         })
         .finally(() => {
-            // Restore button
+            // Reset button
             button.innerHTML = originalText;
             button.disabled = false;
         });
@@ -840,57 +828,77 @@ function addToCart(productId) {
     <?php endif; ?>
 }
 
-// Show message function
-function showMessage(message, type) {
+// Simple message display function
+function showMessage(message, type = 'info') {
     // Remove existing messages
-    const existingMessages = document.querySelectorAll('.message-toast');
+    const existingMessages = document.querySelectorAll('.alert-message');
     existingMessages.forEach(msg => msg.remove());
-    
+
     // Create message element
-    const messageDiv = document.createElement('div');
-    messageDiv.className = `message-toast alert alert-${type === 'success' ? 'success' : 'danger'}`;
-    messageDiv.style.cssText = `
+    const messageElement = document.createElement('div');
+    messageElement.className = `alert alert-${type === 'success' ? 'success' : 'danger'} alert-message`;
+    messageElement.style.cssText = `
         position: fixed;
         top: 20px;
         right: 20px;
-        z-index: 9999;
+        z-index: 1050;
         min-width: 300px;
-        padding: 15px 20px;
-        border-radius: 10px;
-        box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-        background: ${type === 'success' ? '#d4edda' : '#f8d7da'};
-        color: ${type === 'success' ? '#155724' : '#721c24'};
-        border: 1px solid ${type === 'success' ? '#c3e6cb' : '#f5c6cb'};
         animation: slideIn 0.3s ease;
+        padding: 15px;
+        border-radius: 5px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     `;
-    messageDiv.innerHTML = `
-        <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'} me-2"></i>
+    
+    messageElement.innerHTML = `
+        <i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'}"></i>
         ${message}
+        <button type="button" class="btn-close" onclick="this.parentElement.remove()" style="margin-left: 10px; background: none; border: none; font-size: 18px; cursor: pointer;">&times;</button>
     `;
-    
+
     // Add to page
-    document.body.appendChild(messageDiv);
-    
-    // Remove after 3 seconds
+    document.body.appendChild(messageElement);
+
+    // Auto-hide after 5 seconds
     setTimeout(() => {
-        messageDiv.style.animation = 'slideOut 0.3s ease forwards';
-        setTimeout(() => messageDiv.remove(), 300);
-    }, 3000);
+        if (messageElement.parentNode) {
+            messageElement.remove();
+        }
+    }, 5000);
 }
 
-// Add animations
-const style = document.createElement('style');
-style.textContent = `
-    @keyframes slideIn {
-        from { transform: translateX(100%); opacity: 0; }
-        to { transform: translateX(0); opacity: 1; }
-    }
-    @keyframes slideOut {
-        from { transform: translateX(0); opacity: 1; }
-        to { transform: translateX(100%); opacity: 0; }
-    }
-`;
-document.head.appendChild(style);
+// Add CSS for animation if not already present
+if (!document.querySelector('#cart-message-styles')) {
+    const styles = document.createElement('style');
+    styles.id = 'cart-message-styles';
+    styles.textContent = `
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        .alert-message {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .alert-message .btn-close {
+            margin-left: auto;
+        }
+        .fa-spinner {
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+    `;
+    document.head.appendChild(styles);
+}
+
+// Initialize page
+document.addEventListener('DOMContentLoaded', function() {
+    // Add any additional initialization here if needed
+    console.log('Shop page loaded successfully');
+});
 </script>
 
 <?php
