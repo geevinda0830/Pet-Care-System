@@ -19,10 +19,12 @@ require_once '../config/db_connect.php';
 // Total users
 $users_sql = "SELECT 
                 (SELECT COUNT(*) FROM pet_owner) as pet_owners_count,
-                (SELECT COUNT(*) FROM pet_sitter) as pet_sitters_count";
+                (SELECT COUNT(*) FROM pet_sitter WHERE approval_status = 'Approved') as pet_sitters_count,
+                (SELECT COUNT(*) FROM pet_sitter WHERE approval_status = 'Pending') as pending_sitters_count";
 $users_result = $conn->query($users_sql);
 $users_stats = $users_result->fetch_assoc();
 $total_users = $users_stats['pet_owners_count'] + $users_stats['pet_sitters_count'];
+$pending_sitters_count = $users_stats['pending_sitters_count'];
 
 // Total pets
 $pets_sql = "SELECT COUNT(*) as total FROM pet_profile";
@@ -52,10 +54,16 @@ $orders_sql = "SELECT
 $orders_result = $conn->query($orders_sql);
 $orders_stats = $orders_result->fetch_assoc();
 
-// Total products
-$products_sql = "SELECT COUNT(*) as total FROM pet_food_and_accessories";
+// Total products and inventory stats
+$products_sql = "SELECT 
+                  COUNT(*) as total,
+                  COUNT(CASE WHEN stock <= 10 THEN 1 END) as low_stock,
+                  COUNT(CASE WHEN stock = 0 THEN 1 END) as out_of_stock,
+                  SUM(stock) as total_stock,
+                  AVG(price) as avg_price
+                FROM pet_food_and_accessories";
 $products_result = $conn->query($products_sql);
-$products_count = $products_result->fetch_assoc()['total'];
+$products_stats = $products_result->fetch_assoc();
 
 // Total services
 $services_sql = "SELECT COUNT(*) as total FROM pet_service";
@@ -70,8 +78,8 @@ $total_revenue = $revenue_result->fetch_assoc()['total'] ?: 0;
 // Recent bookings
 $recent_bookings_sql = "SELECT b.*, po.fullName as ownerName, ps.fullName as sitterName 
                         FROM booking b 
-                        JOIN pet_owner po ON b.userID = po.userID 
-                        JOIN pet_sitter ps ON b.sitterID = ps.userID 
+                        LEFT JOIN pet_owner po ON b.userID = po.userID 
+                        LEFT JOIN pet_sitter ps ON b.sitterID = ps.userID 
                         ORDER BY b.created_at DESC LIMIT 5";
 $recent_bookings_result = $conn->query($recent_bookings_sql);
 $recent_bookings = [];
@@ -105,10 +113,14 @@ while ($row = $recent_users_result->fetch_assoc()) {
     $recent_users[] = $row;
 }
 
-// Get pending pet sitter count for notification badge
-$pending_sitters_sql = "SELECT COUNT(*) as count FROM pet_sitter WHERE approval_status = 'Pending'";
-$pending_sitters_result = $conn->query($pending_sitters_sql);
-$pending_sitters_count = $pending_sitters_result->fetch_assoc()['count'];
+// Low stock products
+$low_stock_sql = "SELECT name, brand, stock FROM pet_food_and_accessories 
+                  WHERE stock <= 10 ORDER BY stock ASC LIMIT 5";
+$low_stock_result = $conn->query($low_stock_sql);
+$low_stock_products = [];
+while ($row = $low_stock_result->fetch_assoc()) {
+    $low_stock_products[] = $row;
+}
 
 // Include header
 include_once '../includes/header.php';
@@ -164,51 +176,46 @@ include_once '../includes/header.php';
 .dashboard-subtitle {
     font-size: 1.2rem;
     opacity: 0.9;
-    margin-bottom: 0;
+    line-height: 1.6;
 }
 
 .dashboard-actions {
-    display: flex;
-    gap: 16px;
-    flex-wrap: wrap;
+    position: relative;
+    z-index: 2;
 }
 
 .btn-glass {
-    background: rgba(255, 255, 255, 0.2);
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
     color: white;
     padding: 12px 24px;
     border-radius: 50px;
-    text-decoration: none;
-    font-weight: 600;
-    transition: all 0.3s ease;
     backdrop-filter: blur(10px);
+    transition: all 0.3s ease;
+    margin: 0 8px;
+    text-decoration: none;
 }
 
 .btn-glass:hover {
-    background: rgba(255, 255, 255, 0.3);
-    transform: translateY(-2px);
+    background: rgba(255, 255, 255, 0.2);
     color: white;
+    transform: translateY(-2px);
 }
 
 .dashboard-content {
     padding: 80px 0;
     background: #f8f9ff;
-    margin-top: -40px;
-    position: relative;
-    z-index: 3;
 }
 
+/* Modern Statistics Cards */
 .stat-card-modern {
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(20px);
-    border-radius: 24px;
-    padding: 32px;
-    text-align: center;
-    height: 100%;
+    background: white;
+    border-radius: 20px;
+    padding: 32px 24px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.08);
+    border: 1px solid rgba(0, 0, 0, 0.05);
     transition: all 0.3s ease;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+    text-align: center;
     position: relative;
     overflow: hidden;
 }
@@ -218,65 +225,163 @@ include_once '../includes/header.php';
     position: absolute;
     top: 0;
     left: 0;
-    width: 100%;
+    right: 0;
     height: 4px;
     background: linear-gradient(90deg, #667eea, #764ba2);
 }
 
 .stat-card-modern:hover {
     transform: translateY(-8px);
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.12);
 }
 
 .stat-icon {
     width: 80px;
     height: 80px;
-    margin: 0 auto 24px;
-    background: linear-gradient(135deg, #f1f5f9, #e2e8f0);
-    border-radius: 20px;
+    border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
+    margin: 0 auto 20px;
     font-size: 2rem;
-    color: #667eea;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
 }
 
 .stat-number {
     font-size: 2.5rem;
     font-weight: 800;
     color: #1e293b;
-    margin-bottom: 8px;
     display: block;
+    margin-bottom: 8px;
+    line-height: 1;
 }
 
 .stat-label {
-    font-size: 1.1rem;
-    font-weight: 600;
     color: #64748b;
+    font-weight: 600;
+    font-size: 1rem;
     margin-bottom: 12px;
 }
 
 .stat-details {
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     color: #9ca3af;
     line-height: 1.4;
 }
 
-.stat-card-modern .btn {
-    margin-top: 16px;
-    border-radius: 50px;
-    padding: 8px 20px;
-    font-size: 0.85rem;
+.stat-trend {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
     font-weight: 600;
+    margin-top: 8px;
 }
 
-.activity-card {
+.trend-up {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.trend-down {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+/* Quick Actions */
+.quick-actions-section {
+    margin-top: 60px;
+}
+
+.section-title {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin-bottom: 16px;
+}
+
+.quick-action-modern {
+    display: block;
+    background: white;
+    border-radius: 20px;
+    padding: 32px 24px;
+    text-decoration: none;
+    color: inherit;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    transition: all 0.3s ease;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+    height: 100%;
+}
+
+.quick-action-modern::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #667eea, #764ba2);
+    transform: scaleX(0);
+    transition: transform 0.3s ease;
+}
+
+.quick-action-modern:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.12);
+    color: inherit;
+    text-decoration: none;
+}
+
+.quick-action-modern:hover::before {
+    transform: scaleX(1);
+}
+
+.action-icon-modern {
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 20px;
+    font-size: 1.8rem;
+    transition: all 0.3s ease;
+}
+
+.quick-action-modern:hover .action-icon-modern {
+    transform: scale(1.1);
+    box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+}
+
+.action-title {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin-bottom: 8px;
+}
+
+.action-description {
+    color: #64748b;
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+/* Activity Cards */
+.activity-card-modern {
     background: white;
     border-radius: 20px;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
     border: 1px solid rgba(0, 0, 0, 0.05);
     overflow: hidden;
-    height: 100%;
+    margin-bottom: 32px;
 }
 
 .activity-card-header {
@@ -284,7 +389,7 @@ include_once '../includes/header.php';
     padding: 24px 32px;
     border-bottom: 1px solid rgba(0, 0, 0, 0.05);
     display: flex;
-    justify-content: between;
+    justify-content: space-between;
     align-items: center;
 }
 
@@ -378,7 +483,7 @@ include_once '../includes/header.php';
     color: #374151;
     margin-bottom: 8px;
     display: flex;
-    justify-content: between;
+    justify-content: space-between;
     align-items: center;
 }
 
@@ -402,7 +507,7 @@ include_once '../includes/header.php';
 
 .status-details {
     display: flex;
-    justify-content: between;
+    justify-content: space-between;
     align-items: center;
     font-size: 0.85rem;
 }
@@ -419,132 +524,92 @@ include_once '../includes/header.php';
 
 .system-online {
     display: flex;
-    justify-content: between;
+    justify-content: space-between;
     align-items: center;
 }
 
-.system-online .status-indicator {
+.status-indicator {
     display: flex;
     align-items: center;
-    gap: 8px;
-    color: #10b981;
     font-weight: 600;
+    color: #059669;
 }
 
 .status-dot {
-    width: 8px;
-    height: 8px;
+    width: 12px;
+    height: 12px;
     background: #10b981;
     border-radius: 50%;
+    margin-right: 8px;
     animation: pulse 2s infinite;
 }
 
-.quick-actions-section {
-    margin-top: 60px;
+@keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+    70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
 }
 
-.quick-action-modern {
-    background: white;
-    border-radius: 20px;
-    padding: 32px 24px;
-    text-align: center;
-    height: 100%;
-    transition: all 0.3s ease;
-    border: 1px solid rgba(0, 0, 0, 0.05);
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-    text-decoration: none;
-    color: inherit;
-    position: relative;
-    overflow: hidden;
-}
-
-.quick-action-modern::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 4px;
-    background: linear-gradient(90deg, #667eea, #764ba2);
-}
-
-.quick-action-modern:hover {
-    transform: translateY(-8px);
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
-    text-decoration: none;
-    color: inherit;
-}
-
-.action-icon-modern {
-    width: 80px;
-    height: 80px;
-    margin: 0 auto 20px;
-    background: linear-gradient(135f, #f1f5f9, #e2e8f0);
-    border-radius: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 2rem;
-    color: #667eea;
-}
-
-.action-title {
-    font-size: 1.2rem;
-    font-weight: 700;
-    color: #1e293b;
-    margin-bottom: 8px;
-}
-
-.action-description {
-    color: #64748b;
-    font-size: 0.9rem;
-    line-height: 1.4;
+.alert-modern {
+    background: linear-gradient(135deg, #fef3c7, #fed7aa);
+    border: none;
+    border-radius: 16px;
+    padding: 24px;
+    margin-top: 40px;
+    border-left: 4px solid #f59e0b;
 }
 
 .empty-state {
     text-align: center;
-    padding: 40px;
-    color: #9ca3af;
+    padding: 40px 20px;
+    color: #6b7280;
 }
 
 .empty-state i {
     font-size: 3rem;
     margin-bottom: 16px;
+    color: #d1d5db;
 }
 
-@media (max-width: 991px) {
+.low-stock-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.low-stock-item:last-child {
+    border-bottom: none;
+}
+
+.stock-badge {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.stock-critical { background: #fee2e2; color: #991b1b; }
+.stock-low { background: #fef3c7; color: #92400e; }
+.stock-out { background: #f3f4f6; color: #374151; }
+
+@media (max-width: 768px) {
     .dashboard-title {
-        font-size: 2.5rem;
+        font-size: 2rem;
     }
     
-    .dashboard-actions {
-        justify-content: center;
-        margin-top: 20px;
-    }
-    
-    .activity-card-header {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 16px;
+    .stat-card-modern {
+        margin-bottom: 24px;
     }
     
     .activity-table th,
     .activity-table td {
         padding: 12px 16px;
     }
-}
-
-@media (max-width: 768px) {
-    .activity-table {
-        font-size: 0.85rem;
-    }
     
     .quick-action-modern {
-        padding: 24px 16px;
-    }
-    
-    .system-status-body {
-        padding: 24px;
+        margin-bottom: 16px;
     }
 }
 </style>
@@ -566,10 +631,10 @@ include_once '../includes/header.php';
             </div>
             <div class="col-lg-4 text-lg-end">
                 <div class="dashboard-actions">
-                    <a href="users.php" class="btn btn-glass">
+                    <a href="users.php" class="btn-glass">
                         <i class="fas fa-users me-2"></i>Manage Users
                     </a>
-                    <a href="settings.php" class="btn btn-glass">
+                    <a href="settings.php" class="btn-glass">
                         <i class="fas fa-cog me-2"></i>Settings
                     </a>
                 </div>
@@ -594,7 +659,12 @@ include_once '../includes/header.php';
                         <?php echo $users_stats['pet_owners_count']; ?> Pet Owners<br>
                         <?php echo $users_stats['pet_sitters_count']; ?> Pet Sitters
                     </div>
-                    <a href="users.php" class="btn btn-outline-primary btn-sm">Manage Users</a>
+                    <?php if ($pending_sitters_count > 0): ?>
+                        <div class="stat-trend trend-down">
+                            <i class="fas fa-clock me-1"></i>
+                            <?php echo $pending_sitters_count; ?> Pending Approval
+                        </div>
+                    <?php endif; ?>
                 </div>
             </div>
             
@@ -610,7 +680,10 @@ include_once '../includes/header.php';
                         <?php echo $bookings_stats['confirmed']; ?> Confirmed<br>
                         <?php echo $bookings_stats['completed']; ?> Completed
                     </div>
-                    <a href="bookings.php" class="btn btn-outline-success btn-sm">View Bookings</a>
+                    <div class="stat-trend trend-up">
+                        <i class="fas fa-arrow-up me-1"></i>
+                        Active Bookings
+                    </div>
                 </div>
             </div>
             
@@ -623,102 +696,149 @@ include_once '../includes/header.php';
                     <div class="stat-label">Total Orders</div>
                     <div class="stat-details">
                         <?php echo $orders_stats['pending']; ?> Pending<br>
-                        <?php echo $orders_stats['processing'] + $orders_stats['shipped']; ?> Processing<br>
+                        <?php echo $orders_stats['processing']; ?> Processing<br>
                         <?php echo $orders_stats['delivered']; ?> Delivered
                     </div>
-                    <a href="orders.php" class="btn btn-outline-info btn-sm">View Orders</a>
+                    <div class="stat-trend trend-up">
+                        <i class="fas fa-truck me-1"></i>
+                        E-commerce Active
+                    </div>
                 </div>
             </div>
             
             <div class="col-xl-3 col-md-6">
                 <div class="stat-card-modern">
                     <div class="stat-icon">
-                        <i class="fas fa-dollar-sign"></i>
+                        <i class="fas fa-boxes"></i>
                     </div>
-                    <span class="stat-number">$<?php echo number_format($total_revenue, 0); ?></span>
-                    <div class="stat-label">Total Revenue</div>
+                    <span class="stat-number"><?php echo $products_stats['total']; ?></span>
+                    <div class="stat-label">Products</div>
                     <div class="stat-details">
-                        From <?php echo $bookings_stats['completed']; ?> bookings<br>
-                        and <?php echo $orders_stats['delivered']; ?> orders
+                        <?php echo number_format($products_stats['total_stock']); ?> Total Stock<br>
+                        Rs. <?php echo number_format($products_stats['avg_price'], 0); ?> Avg. Price
                     </div>
-                    <a href="revenue.php" class="btn btn-outline-danger btn-sm">Revenue Report</a>
+                    <?php if ($products_stats['low_stock'] > 0): ?>
+                        <div class="stat-trend trend-down">
+                            <i class="fas fa-exclamation-triangle me-1"></i>
+                            <?php echo $products_stats['low_stock']; ?> Low Stock
+                        </div>
+                    <?php else: ?>
+                        <div class="stat-trend trend-up">
+                            <i class="fas fa-check me-1"></i>
+                            All Stocked
+                        </div>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
-        
-        <!-- Additional Statistics Row -->
+
+        <!-- Revenue and Pets Row -->
         <div class="row g-4 mb-5">
-            <div class="col-lg-4">
+            <div class="col-xl-3 col-md-6">
+                <div class="stat-card-modern">
+                    <div class="stat-icon">
+                        <i class="fas fa-dollar-sign"></i>
+                    </div>
+                    <span class="stat-number">Rs. <?php echo number_format($total_revenue, 0); ?></span>
+                    <div class="stat-label">Total Revenue</div>
+                    <div class="stat-details">
+                        From completed transactions<br>
+                        Bookings + Orders
+                    </div>
+                    <div class="stat-trend trend-up">
+                        <i class="fas fa-chart-line me-1"></i>
+                        Growing
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-xl-3 col-md-6">
                 <div class="stat-card-modern">
                     <div class="stat-icon">
                         <i class="fas fa-paw"></i>
                     </div>
                     <span class="stat-number"><?php echo $pets_count; ?></span>
                     <div class="stat-label">Registered Pets</div>
-                    <a href="pets.php" class="btn btn-outline-warning btn-sm">View Pets</a>
-                </div>
-            </div>
-            
-            <div class="col-lg-4">
-                <div class="stat-card-modern">
-                    <div class="stat-icon">
-                        <i class="fas fa-box"></i>
+                    <div class="stat-details">
+                        Pet profiles in system<br>
+                        Across all pet owners
                     </div>
-                    <span class="stat-number"><?php echo $products_count; ?></span>
-                    <div class="stat-label">Products</div>
-                    <a href="products.php" class="btn btn-outline-primary btn-sm">Manage Products</a>
+                    <div class="stat-trend trend-up">
+                        <i class="fas fa-heart me-1"></i>
+                        Pet Community
+                    </div>
                 </div>
             </div>
             
-            <div class="col-lg-4">
+            <div class="col-xl-3 col-md-6">
                 <div class="stat-card-modern">
                     <div class="stat-icon">
                         <i class="fas fa-concierge-bell"></i>
                     </div>
                     <span class="stat-number"><?php echo $services_count; ?></span>
-                    <div class="stat-label">Services</div>
-                    <a href="services.php" class="btn btn-outline-success btn-sm">View Services</a>
+                    <div class="stat-label">Pet Services</div>
+                    <div class="stat-details">
+                        Available services<br>
+                        From approved sitters
+                    </div>
+                    <div class="stat-trend trend-up">
+                        <i class="fas fa-star me-1"></i>
+                        Service Network
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-xl-3 col-md-6">
+                <div class="stat-card-modern">
+                    <div class="stat-icon">
+                        <i class="fas fa-chart-pie"></i>
+                    </div>
+                    <span class="stat-number"><?php echo round(($orders_stats['delivered'] / max($orders_stats['total'], 1)) * 100); ?>%</span>
+                    <div class="stat-label">Order Success Rate</div>
+                    <div class="stat-details">
+                        Successful deliveries<br>
+                        Customer satisfaction
+                    </div>
+                    <div class="stat-trend trend-up">
+                        <i class="fas fa-thumbs-up me-1"></i>
+                        Excellent
+                    </div>
                 </div>
             </div>
         </div>
-        
-        <div class="row g-4">
+
+        <!-- Recent Activity -->
+        <div class="row g-4 mb-5">
             <!-- Recent Bookings -->
-            <div class="col-lg-6 mb-4">
-                <div class="activity-card">
+            <div class="col-lg-6">
+                <div class="activity-card-modern">
                     <div class="activity-card-header">
-                        <h5>Recent Bookings</h5>
-                        <a href="bookings.php" class="btn btn-primary btn-sm">View All</a>
+                        <h5><i class="fas fa-calendar-alt me-2"></i>Recent Bookings</h5>
+                        <a href="bookings.php" class="btn btn-outline-primary btn-sm">View All</a>
                     </div>
                     <div class="activity-card-body">
                         <?php if (empty($recent_bookings)): ?>
                             <div class="empty-state">
                                 <i class="fas fa-calendar-times"></i>
-                                <p>No recent bookings found.</p>
+                                <p>No recent bookings</p>
                             </div>
                         <?php else: ?>
                             <table class="table activity-table">
                                 <thead>
                                     <tr>
-                                        <th>ID</th>
                                         <th>Pet Owner</th>
                                         <th>Pet Sitter</th>
-                                        <th>Date</th>
                                         <th>Status</th>
+                                        <th>Date</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <?php foreach ($recent_bookings as $booking): ?>
                                         <tr>
-                                            <td><strong>#<?php echo $booking['bookingID']; ?></strong></td>
-                                            <td><?php echo htmlspecialchars($booking['ownerName']); ?></td>
-                                            <td><?php echo htmlspecialchars($booking['sitterName']); ?></td>
-                                            <td><?php echo date('M d, Y', strtotime($booking['created_at'])); ?></td>
-                                            <td>
-                                                <span class="status-badge status-<?php echo strtolower($booking['status']); ?>">
-                                                    <?php echo $booking['status']; ?>
-                                                </span>
-                                            </td>
+                                            <td><?php echo htmlspecialchars($booking['ownerName'] ?? 'N/A'); ?></td>
+                                            <td><?php echo htmlspecialchars($booking['sitterName'] ?? 'N/A'); ?></td>
+                                            <td><span class="status-badge status-<?php echo strtolower($booking['status']); ?>"><?php echo $booking['status']; ?></span></td>
+                                            <td><?php echo date('M d, Y', strtotime($booking['checkInDate'])); ?></td>
                                         </tr>
                                     <?php endforeach; ?>
                                 </tbody>
@@ -727,41 +847,37 @@ include_once '../includes/header.php';
                     </div>
                 </div>
             </div>
-            
+
             <!-- Recent Orders -->
-            <div class="col-lg-6 mb-4">
-                <div class="activity-card">
+            <div class="col-lg-6">
+                <div class="activity-card-modern">
                     <div class="activity-card-header">
-                        <h5>Recent Orders</h5>
-                        <a href="orders.php" class="btn btn-primary btn-sm">View All</a>
+                        <h5><i class="fas fa-shopping-bag me-2"></i>Recent Orders</h5>
+                        <a href="order_management.php" class="btn btn-outline-primary btn-sm">View All</a>
                     </div>
                     <div class="activity-card-body">
                         <?php if (empty($recent_orders)): ?>
                             <div class="empty-state">
                                 <i class="fas fa-shopping-cart"></i>
-                                <p>No recent orders found.</p>
+                                <p>No recent orders</p>
                             </div>
                         <?php else: ?>
                             <table class="table activity-table">
                                 <thead>
                                     <tr>
-                                        <th>ID</th>
                                         <th>Customer</th>
-                                        <th>Date</th>
                                         <th>Status</th>
+                                        <th>Amount</th>
+                                        <th>Date</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <?php foreach ($recent_orders as $order): ?>
                                         <tr>
-                                            <td><strong>#<?php echo $order['orderID']; ?></strong></td>
                                             <td><?php echo htmlspecialchars($order['customerName']); ?></td>
+                                            <td><span class="status-badge status-<?php echo strtolower($order['status']); ?>"><?php echo $order['status']; ?></span></td>
+                                            <td>Rs. <?php echo number_format($order['total'] ?? 0, 2); ?></td>
                                             <td><?php echo date('M d, Y', strtotime($order['date'])); ?></td>
-                                            <td>
-                                                <span class="status-badge status-<?php echo strtolower($order['status']); ?>">
-                                                    <?php echo $order['status']; ?>
-                                                </span>
-                                            </td>
                                         </tr>
                                     <?php endforeach; ?>
                                 </tbody>
@@ -771,85 +887,27 @@ include_once '../includes/header.php';
                 </div>
             </div>
         </div>
-        
+
+        <!-- System Status and Low Stock -->
         <div class="row g-4 mb-5">
-            <!-- Recent Users -->
-            <div class="col-lg-6">
-                <div class="activity-card">
-                    <div class="activity-card-header">
-                        <h5>Recent Users</h5>
-                        <a href="users.php" class="btn btn-primary btn-sm">View All</a>
-                    </div>
-                    <div class="activity-card-body">
-                        <?php if (empty($recent_users)): ?>
-                            <div class="empty-state">
-                                <i class="fas fa-users"></i>
-                                <p>No recent users found.</p>
-                            </div>
-                        <?php else: ?>
-                            <table class="table activity-table">
-                                <thead>
-                                    <tr>
-                                        <th>Name</th>
-                                        <th>Email</th>
-                                        <th>Type</th>
-                                        <th>Joined</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php foreach ($recent_users as $user): ?>
-                                        <tr>
-                                            <td><?php echo htmlspecialchars($user['fullName']); ?></td>
-                                            <td><?php echo htmlspecialchars($user['email']); ?></td>
-                                            <td>
-                                                <?php if ($user['user_type'] === 'pet_owner'): ?>
-                                                    <span class="status-badge" style="background: #dbeafe; color: #1e40af;">Pet Owner</span>
-                                                <?php else: ?>
-                                                    <span class="status-badge" style="background: #d1fae5; color: #065f46;">Pet Sitter</span>
-                                                <?php endif; ?>
-                                            </td>
-                                            <td><?php echo date('M d, Y', strtotime($user['created_at'])); ?></td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        <?php endif; ?>
-                    </div>
-                </div>
-            </div>
-            
             <!-- System Status -->
-            <div class="col-lg-6">
+            <div class="col-lg-8">
                 <div class="system-status-card">
                     <div class="system-status-header">
-                        <h5>System Status</h5>
+                        <h5><i class="fas fa-server me-2"></i>System Status</h5>
                     </div>
                     <div class="system-status-body">
                         <div class="status-item">
                             <div class="status-label">
-                                <span>Database Health</span>
-                                <span class="text-success">Healthy</span>
+                                <span>Database Performance</span>
+                                <span class="text-success">Excellent</span>
                             </div>
                             <div class="status-bar">
-                                <div class="status-progress healthy" style="width: 92%;"></div>
+                                <div class="status-progress healthy" style="width: 95%;"></div>
                             </div>
                             <div class="status-details">
-                                <span class="text-muted">Connections: 8/100</span>
-                                <span class="text-success">92%</span>
-                            </div>
-                        </div>
-                        
-                        <div class="status-item">
-                            <div class="status-label">
-                                <span>Server Load</span>
-                                <span style="color: #3b82f6;">Normal</span>
-                            </div>
-                            <div class="status-bar">
-                                <div class="status-progress normal" style="width: 45%;"></div>
-                            </div>
-                            <div class="status-details">
-                                <span class="text-muted">CPU Usage</span>
-                                <span style="color: #3b82f6;">45%</span>
+                                <span class="text-muted">Query Response Time</span>
+                                <span class="text-success">< 50ms</span>
                             </div>
                         </div>
                         
@@ -869,14 +927,14 @@ include_once '../includes/header.php';
                         
                         <div class="status-item">
                             <div class="status-label">
-                                <span>Disk Usage</span>
+                                <span>Storage Usage</span>
                                 <span class="text-success">Healthy</span>
                             </div>
                             <div class="status-bar">
                                 <div class="status-progress healthy" style="width: 32%;"></div>
                             </div>
                             <div class="status-details">
-                                <span class="text-muted">Storage Space</span>
+                                <span class="text-muted">Disk Space</span>
                                 <span class="text-success">32%</span>
                             </div>
                         </div>
@@ -892,6 +950,38 @@ include_once '../includes/header.php';
                     </div>
                 </div>
             </div>
+
+            <!-- Low Stock Alerts -->
+            <div class="col-lg-4">
+                <div class="activity-card-modern">
+                    <div class="activity-card-header">
+                        <h5><i class="fas fa-exclamation-triangle me-2 text-warning"></i>Low Stock Alerts</h5>
+                        <a href="manage_products.php?stock_status=low_stock" class="btn btn-outline-warning btn-sm">View All</a>
+                    </div>
+                    <div class="activity-card-body" style="padding: 24px;">
+                        <?php if (empty($low_stock_products)): ?>
+                            <div class="empty-state">
+                                <i class="fas fa-check-circle text-success"></i>
+                                <p>All products well stocked!</p>
+                            </div>
+                        <?php else: ?>
+                            <?php foreach ($low_stock_products as $product): ?>
+                                <div class="low-stock-item">
+                                    <div>
+                                        <strong><?php echo htmlspecialchars($product['name']); ?></strong><br>
+                                        <small class="text-muted"><?php echo htmlspecialchars($product['brand']); ?></small>
+                                    </div>
+                                    <div>
+                                        <span class="stock-badge <?php echo $product['stock'] == 0 ? 'stock-out' : ($product['stock'] <= 5 ? 'stock-critical' : 'stock-low'); ?>">
+                                            <?php echo $product['stock']; ?> left
+                                        </span>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
         </div>
         
         <!-- Quick Actions -->
@@ -902,16 +992,29 @@ include_once '../includes/header.php';
             </div>
             
             <div class="row g-4">
+                <!-- Product Management -->
+                <div class="col-lg-3 col-md-6">
+                    <a href="manage_products.php" class="quick-action-modern">
+                        <div class="action-icon-modern">
+                            <i class="fas fa-boxes"></i>
+                        </div>
+                        <div class="action-title">Manage Products</div>
+                        <div class="action-description">View, add, edit and manage inventory</div>
+                    </a>
+                </div>
+
+                <!-- Add Product -->
                 <div class="col-lg-3 col-md-6">
                     <a href="add_product.php" class="quick-action-modern">
                         <div class="action-icon-modern">
-                            <i class="fas fa-box"></i>
+                            <i class="fas fa-plus"></i>
                         </div>
-                        <div class="action-title">Add New Product</div>
-                        <div class="action-description">Add products to the pet shop inventory</div>
+                        <div class="action-title">Add Product</div>
+                        <div class="action-description">Quickly add new products to inventory</div>
                     </a>
                 </div>
                 
+                <!-- Order Management -->
                 <div class="col-lg-3 col-md-6">
                     <a href="order_management.php" class="quick-action-modern">
                         <div class="action-icon-modern">
@@ -921,7 +1024,41 @@ include_once '../includes/header.php';
                         <div class="action-description">Process and track customer orders</div>
                     </a>
                 </div>
+
+                <!-- User Management -->
+                <div class="col-lg-3 col-md-6">
+                    <a href="users.php" class="quick-action-modern">
+                        <div class="action-icon-modern">
+                            <i class="fas fa-users"></i>
+                        </div>
+                        <div class="action-title">Manage Users</div>
+                        <div class="action-description">Manage pet owners and sitters</div>
+                    </a>
+                </div>
+
+                <!-- Booking Management -->
+                <div class="col-lg-3 col-md-6">
+                    <a href="bookings.php" class="quick-action-modern">
+                        <div class="action-icon-modern">
+                            <i class="fas fa-calendar-check"></i>
+                        </div>
+                        <div class="action-title">Manage Bookings</div>
+                        <div class="action-description">Oversee pet sitting bookings</div>
+                    </a>
+                </div>
+
+                <!-- Pet Sitter Approval -->
+                <div class="col-lg-3 col-md-6">
+                    <a href="pet_sitter_approval.php" class="quick-action-modern">
+                        <div class="action-icon-modern">
+                            <i class="fas fa-user-check"></i>
+                        </div>
+                        <div class="action-title">Approve Sitters</div>
+                        <div class="action-description">Review and approve pet sitters</div>
+                    </a>
+                </div>
                 
+                <!-- Review Management -->
                 <div class="col-lg-3 col-md-6">
                     <a href="pending_reviews.php" class="quick-action-modern">
                         <div class="action-icon-modern">
@@ -932,6 +1069,7 @@ include_once '../includes/header.php';
                     </a>
                 </div>
                 
+                <!-- System Backup -->
                 <div class="col-lg-3 col-md-6">
                     <a href="backup.php" class="quick-action-modern">
                         <div class="action-icon-modern">
@@ -944,9 +1082,9 @@ include_once '../includes/header.php';
             </div>
         </div>
         
-        <!-- Pet Sitter Approval Guide -->
+        <!-- Pet Sitter Approval Alert -->
         <?php if ($pending_sitters_count > 0): ?>
-            <div class="alert" style="background: linear-gradient(135deg, #fef3c7, #fed7aa); border: none; border-radius: 16px; padding: 24px; margin-top: 40px;">
+            <div class="alert-modern">
                 <div class="d-flex align-items-center">
                     <div class="me-3">
                         <i class="fas fa-exclamation-triangle" style="font-size: 2rem; color: #f59e0b;"></i>
@@ -955,9 +1093,10 @@ include_once '../includes/header.php';
                         <h5 style="color: #92400e; margin-bottom: 8px;">Pending Pet Sitter Applications</h5>
                         <p style="color: #92400e; margin-bottom: 16px;">
                             You have <strong><?php echo $pending_sitters_count; ?></strong> pet sitter application<?php echo $pending_sitters_count !== 1 ? 's' : ''; ?> waiting for approval.
+                            Review and approve qualified pet sitters to expand your service network.
                         </p>
-                        <a href="users.php?user_type=pet_sitter&approval_status=Pending" class="btn" style="background: #f59e0b; color: white; border: none; border-radius: 50px; padding: 8px 20px; font-weight: 600;">
-                            Review Applications
+                        <a href="pet_sitter_approval.php" class="btn btn-warning">
+                            <i class="fas fa-user-check me-2"></i>Review Applications
                         </a>
                     </div>
                 </div>
@@ -966,10 +1105,54 @@ include_once '../includes/header.php';
     </div>
 </section>
 
-<?php
-// Include footer
-include_once '../includes/footer.php';
+<?php include_once '../includes/footer.php'; ?>
 
-// Close database connection
-$conn->close();
-?>
+<script>
+// Auto-hide alerts after 8 seconds
+document.addEventListener('DOMContentLoaded', function() {
+    const alerts = document.querySelectorAll('.alert-modern');
+    alerts.forEach(function(alert) {
+        setTimeout(function() {
+            alert.style.opacity = '0.8';
+        }, 8000);
+    });
+    
+    // Add smooth scroll to quick actions
+    const quickActions = document.querySelectorAll('.quick-action-modern');
+    quickActions.forEach(action => {
+        action.addEventListener('click', function(e) {
+            // Add a subtle click effect
+            this.style.transform = 'translateY(-4px) scale(0.98)';
+            setTimeout(() => {
+                this.style.transform = '';
+            }, 150);
+        });
+    });
+    
+    // Dynamic stats animation on page load
+    const statNumbers = document.querySelectorAll('.stat-number');
+    statNumbers.forEach(stat => {
+        const finalValue = parseInt(stat.textContent.replace(/[^\d]/g, ''));
+        if (finalValue > 0) {
+            let currentValue = 0;
+            const increment = Math.ceil(finalValue / 30);
+            const timer = setInterval(() => {
+                currentValue += increment;
+                if (currentValue >= finalValue) {
+                    currentValue = finalValue;
+                    clearInterval(timer);
+                }
+                
+                // Preserve currency and formatting
+                if (stat.textContent.includes('Rs.')) {
+                    stat.textContent = 'Rs. ' + currentValue.toLocaleString();
+                } else if (stat.textContent.includes('%')) {
+                    stat.textContent = currentValue + '%';
+                } else {
+                    stat.textContent = currentValue.toLocaleString();
+                }
+            }, 50);
+        }
+    });
+});
+</script>
