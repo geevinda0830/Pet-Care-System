@@ -711,11 +711,30 @@ include_once '../includes/header.php';
 </section>
 
 <script>
-// Handle status form submission with confirmation
 document.addEventListener('DOMContentLoaded', function() {
     const statusForms = document.querySelectorAll('.status-form');
     
     statusForms.forEach(form => {
+        const statusSelect = form.querySelector('select[name="status"]');
+        const updateBtn = form.querySelector('.btn-update');
+        
+        // Store original status when page loads
+        if (statusSelect) {
+            const originalStatus = statusSelect.value;
+            statusSelect.setAttribute('data-original-status', originalStatus);
+        }
+        
+        // Handle status change
+        if (statusSelect) {
+            statusSelect.addEventListener('change', function() {
+                const updateBtn = form.querySelector('.btn-update');
+                if (updateBtn) {
+                    updateBtn.style.display = 'inline-block';
+                    updateBtn.style.opacity = '1';
+                }
+            });
+        }
+        
         form.addEventListener('submit', function(e) {
             e.preventDefault();
             
@@ -723,14 +742,29 @@ document.addEventListener('DOMContentLoaded', function() {
             const statusSelect = this.querySelector('select[name="status"]');
             const updateBtn = this.querySelector('.btn-update');
             
-            if (!orderIdInput || !statusSelect || !updateBtn) return;
+            if (!orderIdInput || !statusSelect || !updateBtn) {
+                console.error('Required form elements not found');
+                return;
+            }
             
             const orderId = orderIdInput.value;
             const newStatus = statusSelect.value;
-            const originalStatus = statusSelect.getAttribute('data-original');
+            const originalStatus = statusSelect.getAttribute('data-original-status') || statusSelect.getAttribute('data-original');
             
-            // Check if status actually changed
-            if (newStatus === originalStatus) {
+            console.log('Form submission:', {
+                orderId: orderId,
+                newStatus: newStatus,
+                originalStatus: originalStatus
+            });
+            
+            // Validate required fields
+            if (!orderId || !newStatus) {
+                alert('Please ensure order ID and status are provided.');
+                return;
+            }
+            
+            // Check if status actually changed (but allow submission if we can't determine original)
+            if (originalStatus && newStatus === originalStatus) {
                 alert('Please select a different status to update.');
                 return;
             }
@@ -746,7 +780,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 this.submit();
             } else {
                 // Reset to original value if cancelled
-                statusSelect.value = originalStatus;
+                if (originalStatus) {
+                    statusSelect.value = originalStatus;
+                }
             }
         });
     });
