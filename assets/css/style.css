@@ -922,3 +922,258 @@ body {
     background-color: #27ae60;
     border-color: #27ae60;
 }
+
+/* Enhanced Validation Styles for Pet Care System */
+
+/* Validation feedback styling */
+.validation-feedback {
+    font-size: 0.8rem;
+    margin-top: 0.25rem;
+    padding: 0.25rem 0;
+}
+
+.valid-feedback {
+    color: #28a745;
+}
+
+.invalid-feedback {
+    color: #dc3545;
+}
+
+/* Enhanced form control states */
+.form-control-modern.is-valid {
+    border-color: #28a745;
+    box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.1);
+}
+
+.form-control-modern.is-invalid {
+    border-color: #dc3545;
+    box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.1);
+}
+
+/* Password toggle button styling */
+.password-toggle {
+    position: absolute;
+    right: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: #9ca3af;
+    cursor: pointer;
+    z-index: 3;
+    padding: 8px;
+    border-radius: 4px;
+    transition: all 0.3s ease;
+}
+
+.password-toggle:hover {
+    color: #667eea;
+    background-color: rgba(102, 126, 234, 0.1);
+}
+
+.password-toggle:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+}
+
+/* Input group improvements */
+.input-group-modern {
+    position: relative;
+    display: flex;
+    align-items: stretch;
+}
+
+.input-group-modern .form-control-modern {
+    position: relative;
+    flex: 1 1 auto;
+    width: 1%;
+    min-width: 0;
+}
+
+/* Email validation icon */
+.form-control-modern.is-valid + .password-toggle,
+.form-control-modern.is-invalid + .password-toggle {
+    right: 48px; /* Make room for validation icon */
+}
+
+.form-control-modern.is-valid::after,
+.form-control-modern.is-invalid::after {
+    content: '';
+    position: absolute;
+    right: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 16px;
+    height: 16px;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+}
+
+.form-control-modern.is-valid::after {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3e%3cpath fill='%2328a745' d='m2.3 6.73.94-.94 1.83 1.83 3.66-3.66.94.94-4.6 4.6z'/%3e%3c/svg%3e");
+}
+
+.form-control-modern.is-invalid::after {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' width='12' height='12' fill='none' stroke='%23dc3545'%3e%3ccircle cx='6' cy='6' r='4.5'/%3e%3cpath d='m5.5 5.5 1 1m0-1-1 1'/%3e%3c/svg%3e");
+}
+
+/* Password strength indicator */
+.password-strength {
+    margin-top: 0.5rem;
+}
+
+.password-strength-bar {
+    height: 4px;
+    background-color: #e9ecef;
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 0.25rem;
+}
+
+.password-strength-fill {
+    height: 100%;
+    transition: all 0.3s ease;
+    border-radius: 2px;
+}
+
+.strength-weak .password-strength-fill {
+    width: 25%;
+    background-color: #dc3545;
+}
+
+.strength-fair .password-strength-fill {
+    width: 50%;
+    background-color: #ffc107;
+}
+
+.strength-good .password-strength-fill {
+    width: 75%;
+    background-color: #17a2b8;
+}
+
+.strength-strong .password-strength-fill {
+    width: 100%;
+    background-color: #28a745;
+}
+
+.password-requirements {
+    font-size: 0.75rem;
+    color: #6c757d;
+    margin-top: 0.25rem;
+}
+
+.requirement {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.125rem;
+}
+
+.requirement-icon {
+    width: 12px;
+    height: 12px;
+    margin-right: 0.5rem;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.6rem;
+}
+
+.requirement.met .requirement-icon {
+    background-color: #28a745;
+    color: white;
+}
+
+.requirement.met .requirement-icon::before {
+    content: '✓';
+}
+
+.requirement:not(.met) .requirement-icon {
+    background-color: #e9ecef;
+    border: 1px solid #ced4da;
+}
+
+.requirement:not(.met) .requirement-icon::before {
+    content: '';
+}
+
+/* Form animation improvements */
+.form-control-modern {
+    transition: all 0.3s ease, border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+/* Loading state for forms */
+.form-submitting {
+    position: relative;
+    pointer-events: none;
+    opacity: 0.7;
+}
+
+.form-submitting::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 20px;
+    height: 20px;
+    border: 2px solid #667eea;
+    border-top: 2px solid transparent;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: translate(-50%, -50%) rotate(0deg); }
+    100% { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+/* Responsive improvements */
+@media (max-width: 576px) {
+    .validation-feedback {
+        font-size: 0.75rem;
+    }
+    
+    .password-toggle {
+        right: 12px;
+        padding: 6px;
+    }
+    
+    .input-icon {
+        left: 12px;
+    }
+    
+    .form-control-modern {
+        padding: 14px 14px 14px 40px;
+    }
+}
+
+/* Focus states */
+.form-control-modern:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    background: white;
+}
+
+.form-control-modern:focus + .password-toggle {
+    color: #667eea;
+}
+
+/* Error state animations */
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+    20%, 40%, 60%, 80% { transform: translateX(5px); }
+}
+
+.shake {
+    animation: shake 0.5s ease-in-out;
+}
+
+/* Success state */
+.form-success {
+    border: 2px solid #28a745;
+    background-color: #f8fff9;
+}

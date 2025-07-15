@@ -100,7 +100,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_status'])) {
         header("Location: booking_details.php?id=" . $booking_id);
         exit();
     } else {
-        $_SESSION['error_message'] = "Failed to update booking status: " . $conn->error;
+        $_SESSION['error_message'] = "Failed to update booking status: " . $update_stmt->error;
     }
     
     $update_stmt->close();
@@ -110,741 +110,234 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_status'])) {
 include_once '../includes/header.php';
 ?>
 
-<!-- Modern Booking Details Header -->
-<section class="booking-details-header-section">
-    <div class="container">
-        <div class="row align-items-center">
-            <div class="col-lg-8">
-                <div class="booking-header-content">
-                    <span class="section-badge">📅 Booking #<?php echo $booking_id; ?></span>
-                    <h1 class="booking-title">Booking <span class="text-gradient">Details</span></h1>
-                    <div class="booking-status-header">
-                        <?php
-                        $status_class = '';
-                        $status_icon = '';
-                        switch ($booking['status']) {
-                            case 'Pending':
-                                $status_class = 'pending';
-                                $status_icon = 'fa-clock';
-                                break;
-                            case 'Confirmed':
-                                $status_class = 'confirmed';
-                                $status_icon = 'fa-check-circle';
-                                break;
-                            case 'Cancelled':
-                                $status_class = 'cancelled';
-                                $status_icon = 'fa-times-circle';
-                                break;
-                            case 'Completed':
-                                $status_class = 'completed';
-                                $status_icon = 'fa-check-double';
-                                break;
-                        }
-                        ?>
-                        <span class="status-badge-large <?php echo $status_class; ?>">
-                            <i class="fas <?php echo $status_icon; ?> me-2"></i>
-                            <?php echo $booking['status']; ?>
-                        </span>
-                    </div>
-                </div>
-            </div>
-            <div class="col-lg-4 text-lg-end">
-                <a href="bookings.php" class="btn btn-outline-light btn-lg">
-                    <i class="fas fa-arrow-left me-2"></i> Back to Bookings
-                </a>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- Booking Information Cards -->
-<section class="booking-info-section">
-    <div class="container">
-        <div class="row g-4">
-            <!-- Pet Information Card -->
-            <div class="col-lg-4">
-                <div class="info-card pet-card">
-                    <div class="card-header-modern">
-                        <h5><i class="fas fa-paw me-2"></i> Pet Information</h5>
-                    </div>
-                    <div class="card-body-modern text-center">
-                        <div class="pet-avatar-large">
-                            <?php if (!empty($booking['petImage'])): ?>
-                                <img src="../assets/images/pets/<?php echo htmlspecialchars($booking['petImage']); ?>" alt="<?php echo htmlspecialchars($booking['petName']); ?>">
-                            <?php else: ?>
-                                <div class="pet-placeholder">
-                                    <i class="fas fa-paw"></i>
-                                </div>
-                            <?php endif; ?>
-                        </div>
-                        
-                        <h4 class="pet-name"><?php echo htmlspecialchars($booking['petName']); ?></h4>
-                        
-                        <?php if ($booking['petRating']): ?>
-                            <div class="pet-rating">
-                                <?php
-                                $pet_rating = round($booking['petRating'], 1);
-                                $full_stars = floor($pet_rating);
-                                $half_star = $pet_rating - $full_stars >= 0.5;
-                                
-                                for ($i = 1; $i <= 5; $i++) {
-                                    if ($i <= $full_stars) {
-                                        echo '<i class="fas fa-star"></i>';
-                                    } elseif ($i == $full_stars + 1 && $half_star) {
-                                        echo '<i class="fas fa-star-half-alt"></i>';
-                                    } else {
-                                        echo '<i class="far fa-star"></i>';
-                                    }
-                                }
-                                ?>
-                                <span class="rating-text"><?php echo $pet_rating; ?> (<?php echo $booking['petRatingCount']; ?> ratings)</span>
-                            </div>
-                        <?php else: ?>
-                            <p class="text-muted">No ratings yet</p>
-                        <?php endif; ?>
-                        
-                        <div class="pet-details">
-                            <div class="detail-row">
-                                <span class="detail-label">Type:</span>
-                                <span class="detail-value"><?php echo htmlspecialchars($booking['petType']); ?></span>
-                            </div>
-                            <div class="detail-row">
-                                <span class="detail-label">Breed:</span>
-                                <span class="detail-value"><?php echo htmlspecialchars($booking['petBreed']); ?></span>
-                            </div>
-                            <div class="detail-row">
-                                <span class="detail-label">Age:</span>
-                                <span class="detail-value"><?php echo $booking['petAge']; ?> years</span>
-                            </div>
-                            <div class="detail-row">
-                                <span class="detail-label">Sex:</span>
-                                <span class="detail-value"><?php echo $booking['petSex']; ?></span>
-                            </div>
-                            <div class="detail-row">
-                                <span class="detail-label">Color:</span>
-                                <span class="detail-value"><?php echo htmlspecialchars($booking['petColor']); ?></span>
-                            </div>
-                        </div>
-                        
-                        <?php if ($booking['status'] === 'Completed'): ?>
-                            <a href="add_pet_ranking.php?booking_id=<?php echo $booking_id; ?>" class="btn btn-warning w-100 mt-3">
-                                <i class="fas fa-star me-2"></i> Rate This Pet
-                            </a>
-                        <?php endif; ?>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Owner Information Card -->
-            <div class="col-lg-4">
-                <div class="info-card owner-card">
-                    <div class="card-header-modern">
-                        <h5><i class="fas fa-user me-2"></i> Pet Owner</h5>
-                    </div>
-                    <div class="card-body-modern">
-                        <div class="owner-info">
-                            <div class="owner-avatar">
-                                <i class="fas fa-user"></i>
-                            </div>
-                            <div class="owner-details">
-                                <h6><?php echo htmlspecialchars($booking['ownerName']); ?></h6>
-                                <p class="text-muted">Pet Owner</p>
-                            </div>
-                        </div>
-                        
-                        <div class="contact-details">
-                            <div class="contact-item">
-                                <i class="fas fa-envelope"></i>
-                                <div>
-                                    <span class="contact-label">Email</span>
-                                    <span class="contact-value"><?php echo htmlspecialchars($booking['ownerEmail']); ?></span>
-                                </div>
-                            </div>
-                            <div class="contact-item">
-                                <i class="fas fa-phone"></i>
-                                <div>
-                                    <span class="contact-label">Phone</span>
-                                    <span class="contact-value"><?php echo htmlspecialchars($booking['ownerContact']); ?></span>
-                                </div>
-                            </div>
-                            <div class="contact-item">
-                                <i class="fas fa-map-marker-alt"></i>
-                                <div>
-                                    <span class="contact-label">Address</span>
-                                    <span class="contact-value"><?php echo nl2br(htmlspecialchars($booking['ownerAddress'])); ?></span>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <?php if ($booking['status'] !== 'Cancelled'): ?>
-                            <div class="contact-actions">
-                                <a href="mailto:<?php echo $booking['ownerEmail']; ?>" class="btn btn-outline-primary">
-                                    <i class="fas fa-envelope me-2"></i> Send Email
-                                </a>
-                                <a href="tel:<?php echo $booking['ownerContact']; ?>" class="btn btn-outline-success">
-                                    <i class="fas fa-phone me-2"></i> Call Owner
-                                </a>
-                            </div>
-                        <?php endif; ?>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Booking Summary Card -->
-            <div class="col-lg-4">
-                <div class="info-card booking-summary-card">
-                    <div class="card-header-modern">
-                        <h5><i class="fas fa-calculator me-2"></i> Booking Summary</h5>
-                    </div>
-                    <div class="card-body-modern">
-                        <div class="summary-item">
-                            <span class="summary-label">Service Duration</span>
-                            <span class="summary-value">
-                                <?php
-                                $duration = '';
-                                if ($interval->days > 0) {
-                                    $duration .= $interval->days . ' day' . ($interval->days > 1 ? 's' : '') . ' ';
-                                }
-                                
-                                if ($interval->h > 0) {
-                                    $duration .= $interval->h . ' hour' . ($interval->h > 1 ? 's' : '') . ' ';
-                                }
-                                
-                                if (empty($duration) && $interval->i > 0) {
-                                    $duration .= $interval->i . ' minute' . ($interval->i > 1 ? 's' : '') . ' ';
-                                }
-                                
-                                echo trim($duration);
-                                ?>
-                            </span>
-                        </div>
-                        
-                        <div class="summary-item">
-                            <span class="summary-label">Your Hourly Rate</span>
-                            <span class="summary-value">$<?php echo number_format($hourly_rate, 2); ?></span>
-                        </div>
-                        
-                        <div class="summary-item">
-                            <span class="summary-label">Total Hours</span>
-                            <span class="summary-value"><?php echo number_format($total_hours, 1); ?> hours</span>
-                        </div>
-                        
-                        <div class="summary-divider"></div>
-                        
-                        <div class="summary-item total">
-                            <span class="summary-label">Total Value</span>
-                            <span class="summary-value total-value">$<?php echo number_format($total_cost, 2); ?></span>
-                        </div>
-                        
-                        <div class="payment-status">
-                            <?php if ($payment): ?>
-                                <div class="payment-info">
-                                    <div class="payment-badge <?php echo strtolower($payment['status']); ?>">
-                                        <i class="fas fa-credit-card me-1"></i>
-                                        Payment <?php echo $payment['status']; ?>
-                                    </div>
-                                    <div class="payment-details">
-                                        <small>Amount: $<?php echo number_format($payment['amount'], 2); ?></small><br>
-                                        <small>Method: <?php echo ucfirst($payment['payment_method']); ?></small><br>
-                                        <small>Date: <?php echo date('M d, Y', strtotime($payment['paymentDate'])); ?></small>
-                                    </div>
-                                </div>
-                            <?php else: ?>
-                                <div class="payment-badge pending">
-                                    <i class="fas fa-clock me-1"></i>
-                                    Payment Pending
-                                </div>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- Booking Timeline and Details -->
-<section class="booking-timeline-section">
-    <div class="container">
-        <div class="row g-4">
-            <!-- Timeline and Schedule -->
-            <div class="col-lg-8">
-                <div class="info-card timeline-card">
-                    <div class="card-header-modern">
-                        <h5><i class="fas fa-calendar-alt me-2"></i> Schedule & Timeline</h5>
-                    </div>
-                    <div class="card-body-modern">
-                        <div class="schedule-grid">
-                            <div class="schedule-item">
-                                <div class="schedule-icon checkin">
-                                    <i class="fas fa-play"></i>
-                                </div>
-                                <div class="schedule-content">
-                                    <h6>Check-in</h6>
-                                    <p class="schedule-date"><?php echo date('l, F d, Y', strtotime($booking['checkInDate'])); ?></p>
-                                    <p class="schedule-time"><?php echo date('h:i A', strtotime($booking['checkInTime'])); ?></p>
-                                </div>
-                            </div>
-                            
-                            <div class="schedule-item">
-                                <div class="schedule-icon checkout">
-                                    <i class="fas fa-stop"></i>
-                                </div>
-                                <div class="schedule-content">
-                                    <h6>Check-out</h6>
-                                    <p class="schedule-date"><?php echo date('l, F d, Y', strtotime($booking['checkOutDate'])); ?></p>
-                                    <p class="schedule-time"><?php echo date('h:i A', strtotime($booking['checkOutTime'])); ?></p>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="booking-timeline">
-                            <div class="timeline-item">
-                                <div class="timeline-marker booking-created">
-                                    <i class="fas fa-plus"></i>
-                                </div>
-                                <div class="timeline-content">
-                                    <h6>Booking Created</h6>
-                                    <p><?php echo date('M d, Y \a\t h:i A', strtotime($booking['created_at'])); ?></p>
-                                </div>
-                            </div>
-                            
-                            <?php if ($booking['status'] !== 'Pending'): ?>
-                                <div class="timeline-item">
-                                    <div class="timeline-marker status-updated">
-                                        <i class="fas fa-edit"></i>
-                                    </div>
-                                    <div class="timeline-content">
-                                        <h6>Status Updated to <?php echo $booking['status']; ?></h6>
-                                        <p>Updated by you</p>
-                                    </div>
-                                </div>
-                            <?php endif; ?>
-                            
-                            <?php if ($payment): ?>
-                                <div class="timeline-item">
-                                    <div class="timeline-marker payment-received">
-                                        <i class="fas fa-dollar-sign"></i>
-                                    </div>
-                                    <div class="timeline-content">
-                                        <h6>Payment Received</h6>
-                                        <p>$<?php echo number_format($payment['amount'], 2); ?> via <?php echo ucfirst($payment['payment_method']); ?></p>
-                                    </div>
-                                </div>
-                            <?php endif; ?>
-                        </div>
-                        
-                        <?php if (!empty($booking['additionalInformation'])): ?>
-                            <div class="additional-info">
-                                <h6><i class="fas fa-info-circle me-2"></i> Special Instructions</h6>
-                                <div class="info-content">
-                                    <?php echo nl2br(htmlspecialchars($booking['additionalInformation'])); ?>
-                                </div>
-                            </div>
-                        <?php endif; ?>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Actions and Status Updates -->
-            <div class="col-lg-4">
-                <div class="info-card actions-card">
-                    <div class="card-header-modern">
-                        <h5><i class="fas fa-cogs me-2"></i> Actions</h5>
-                    </div>
-                    <div class="card-body-modern">
-                        <?php if ($booking['status'] === 'Pending'): ?>
-                            <div class="action-section pending-actions">
-                                <h6>Booking Pending</h6>
-                                <p class="text-muted mb-3">This booking request is waiting for your response.</p>
-                                
-                                <div class="action-buttons">
-                                    <button type="button" class="btn btn-success w-100 mb-2" data-bs-toggle="modal" data-bs-target="#confirmModal">
-                                        <i class="fas fa-check me-2"></i> Accept Booking
-                                    </button>
-                                    <button type="button" class="btn btn-danger w-100" data-bs-toggle="modal" data-bs-target="#declineModal">
-                                        <i class="fas fa-times me-2"></i> Decline Booking
-                                    </button>
-                                </div>
-                            </div>
-                        <?php elseif ($booking['status'] === 'Confirmed' && strtotime($booking['checkOutDate']) <= time()): ?>
-                            <div class="action-section complete-actions">
-                                <h6>Ready to Complete</h6>
-                                <p class="text-muted mb-3">This booking has passed its end date. Mark it as completed.</p>
-                                
-                                <button type="button" class="btn btn-info w-100" data-bs-toggle="modal" data-bs-target="#completeModal">
-                                    <i class="fas fa-check-circle me-2"></i> Mark as Completed
-                                </button>
-                            </div>
-                        <?php elseif ($booking['status'] === 'Confirmed'): ?>
-                            <div class="action-section confirmed-actions">
-                                <h6>Booking Confirmed</h6>
-                                <p class="text-muted mb-3">Everything looks good! The booking is confirmed and scheduled.</p>
-                                
-                                <div class="countdown-timer">
-                                    <?php
-                                    $now = new DateTime();
-                                    $checkIn = new DateTime($booking['checkInDate'] . ' ' . $booking['checkInTime']);
-                                    $timeDiff = $now->diff($checkIn);
-                                    
-                                    if ($checkIn > $now): ?>
-                                        <div class="countdown">
-                                            <i class="fas fa-clock me-2"></i>
-                                            Starts in <?php echo $timeDiff->days; ?> days, <?php echo $timeDiff->h; ?> hours
-                                        </div>
-                                    <?php else: ?>
-                                        <div class="countdown active">
-                                            <i class="fas fa-play me-2"></i>
-                                            Service is active
-                                        </div>
-                                    <?php endif; ?>
-                                </div>
-                            </div>
-                        <?php elseif ($booking['status'] === 'Completed'): ?>
-                            <div class="action-section completed-actions">
-                                <h6>Booking Completed</h6>
-                                <p class="text-muted mb-3">Great job! This booking has been successfully completed.</p>
-                                
-                                <a href="add_pet_ranking.php?booking_id=<?php echo $booking_id; ?>" class="btn btn-warning w-100">
-                                    <i class="fas fa-star me-2"></i> Rate This Pet
-                                </a>
-                            </div>
-                        <?php else: ?>
-                            <div class="action-section cancelled-actions">
-                                <h6>Booking Cancelled</h6>
-                                <p class="text-muted">This booking has been cancelled.</p>
-                            </div>
-                        <?php endif; ?>
-                        
-                        <div class="quick-actions">
-                            <h6>Quick Actions</h6>
-                            <div class="quick-action-grid">
-                                <button type="button" class="quick-action-btn" onclick="window.print();">
-                                    <i class="fas fa-print"></i>
-                                    <span>Print</span>
-                                </button>
-                                <a href="mailto:<?php echo $booking['ownerEmail']; ?>" class="quick-action-btn">
-                                    <i class="fas fa-envelope"></i>
-                                    <span>Email</span>
-                                </a>
-                                <a href="tel:<?php echo $booking['ownerContact']; ?>" class="quick-action-btn">
-                                    <i class="fas fa-phone"></i>
-                                    <span>Call</span>
-                                </a>
-                                <a href="bookings.php" class="quick-action-btn">
-                                    <i class="fas fa-list"></i>
-                                    <span>All Bookings</span>
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- Status Update Modals -->
-<?php if ($booking['status'] === 'Pending'): ?>
-    <!-- Confirm Modal -->
-    <div class="modal fade" id="confirmModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content modern-modal">
-                <div class="modal-header">
-                    <h5 class="modal-title">Confirm Booking</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body text-center">
-                    <i class="fas fa-calendar-check text-success mb-3" style="font-size: 4rem;"></i>
-                    <h5>Accept this booking?</h5>
-                    <p class="text-muted">You're about to confirm the booking for <strong><?php echo htmlspecialchars($booking['petName']); ?></strong>.</p>
-                    <div class="booking-summary-modal">
-                        <div class="summary-row">
-                            <span>Date:</span>
-                            <span><?php echo date('M d, Y', strtotime($booking['checkInDate'])); ?></span>
-                        </div>
-                        <div class="summary-row">
-                            <span>Time:</span>
-                            <span><?php echo date('h:i A', strtotime($booking['checkInTime'])); ?> - <?php echo date('h:i A', strtotime($booking['checkOutTime'])); ?></span>
-                        </div>
-                        <div class="summary-row">
-                            <span>Estimated Value:</span>
-                            <span class="fw-bold">$<?php echo number_format($total_cost, 2); ?></span>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <form action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"] . '?id=' . $booking_id); ?>" method="post" class="d-inline">
-                        <input type="hidden" name="new_status" value="Confirmed">
-                        <button type="submit" name="update_status" class="btn btn-success">
-                            <i class="fas fa-check me-2"></i> Confirm Booking
-                        </button>
-                    </form>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Decline Modal -->
-    <div class="modal fade" id="declineModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content modern-modal">
-                <div class="modal-header">
-                    <h5 class="modal-title">Decline Booking</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body text-center">
-                    <i class="fas fa-times-circle text-danger mb-3" style="font-size: 4rem;"></i>
-                    <h5>Decline this booking?</h5>
-                    <p class="text-muted">This action cannot be undone. The pet owner will be notified about the decline.</p>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <form action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"] . '?id=' . $booking_id); ?>" method="post" class="d-inline">
-                        <input type="hidden" name="new_status" value="Cancelled">
-                        <button type="submit" name="update_status" class="btn btn-danger">
-                            <i class="fas fa-times me-2"></i> Decline Booking
-                        </button>
-                    </form>
-                </div>
-            </div>
-        </div>
-    </div>
-<?php endif; ?>
-
-<?php if ($booking['status'] === 'Confirmed' && strtotime($booking['checkOutDate']) <= time()): ?>
-    <!-- Complete Modal -->
-    <div class="modal fade" id="completeModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content modern-modal">
-                <div class="modal-header">
-                    <h5 class="modal-title">Complete Booking</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body text-center">
-                    <i class="fas fa-check-circle text-info mb-3" style="font-size: 4rem;"></i>
-                    <h5>Mark as completed?</h5>
-                    <p class="text-muted">This will finalize the booking and allow the pet owner to leave a review.</p>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <form action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"] . '?id=' . $booking_id); ?>" method="post" class="d-inline">
-                        <input type="hidden" name="new_status" value="Completed">
-                        <button type="submit" name="update_status" class="btn btn-info">
-                            <i class="fas fa-check-circle me-2"></i> Mark as Completed
-                        </button>
-                    </form>
-                </div>
-            </div>
-        </div>
-    </div>
-<?php endif; ?>
-
 <style>
-.booking-details-header-section {
+/* Modern Booking Details Styles */
+.page-header-modern {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
-    padding: 80px 0;
-    position: relative;
-    overflow: hidden;
+    padding: 60px 0;
+    margin-bottom: 0;
 }
 
-.booking-details-header-section::before {
-    content: '';
-    position: absolute;
-    width: 100%;
-    height: 100%;
-    background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="20" cy="20" r="2" fill="rgba(255,255,255,0.1)"/><circle cx="80" cy="40" r="1" fill="rgba(255,255,255,0.1)"/><circle cx="40" cy="80" r="1.5" fill="rgba(255,255,255,0.1)"/></svg>');
-    animation: float 20s infinite linear;
-}
-
-.booking-title {
-    font-size: 3.5rem;
-    font-weight: 800;
-    line-height: 1.2;
-    margin-bottom: 24px;
-}
-
-.booking-status-header {
-    margin-top: 16px;
-}
-
-.status-badge-large {
-    padding: 12px 24px;
-    border-radius: 25px;
-    font-size: 1.1rem;
+.page-badge {
+    background: rgba(255, 255, 255, 0.2);
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 0.85rem;
     font-weight: 600;
-    display: inline-flex;
-    align-items: center;
+    display: inline-block;
+    margin-bottom: 15px;
 }
 
-.status-badge-large.pending { background: rgba(245, 158, 11, 0.2); color: #d97706; border: 2px solid #f59e0b; }
-.status-badge-large.confirmed { background: rgba(16, 185, 129, 0.2); color: #059669; border: 2px solid #10b981; }
-.status-badge-large.completed { background: rgba(59, 130, 246, 0.2); color: #1d4ed8; border: 2px solid #3b82f6; }
-.status-badge-large.cancelled { background: rgba(239, 68, 68, 0.2); color: #dc2626; border: 2px solid #ef4444; }
+.page-title {
+    font-size: 2.5rem;
+    font-weight: 700;
+    margin-bottom: 12px;
+}
 
-.booking-info-section {
-    padding: 0;
-    margin-top: -40px;
-    position: relative;
-    z-index: 2;
+.text-gradient {
+    background: linear-gradient(45deg, #ffd700, #ffed4e);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.page-subtitle {
+    font-size: 1.1rem;
+    opacity: 0.9;
+    margin: 0;
+}
+
+.booking-details-section {
+    padding: 60px 0;
+    background: #f8fafc;
 }
 
 .info-card {
     background: white;
     border-radius: 20px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-    border: 1px solid rgba(0, 0, 0, 0.05);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
     overflow: hidden;
-    height: 100%;
+    margin-bottom: 30px;
 }
 
-.card-header-modern {
-    background: #f8f9ff;
-    padding: 20px 24px;
-    border-bottom: 1px solid #f1f5f9;
+.card-header {
+    background: linear-gradient(135deg, #f8f9ff 0%, #f1f5f9 100%);
+    padding: 25px 30px;
+    border-bottom: 1px solid #e5e7eb;
 }
 
-.card-header-modern h5 {
+.card-header h5 {
+    margin: 0;
     font-weight: 600;
     color: #1e293b;
+    font-size: 1.2rem;
+}
+
+.info-content {
+    padding: 30px;
+}
+
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 25px;
+}
+
+.info-item {
+    padding: 20px;
+    background: #f8fafc;
+    border-radius: 15px;
+    border-left: 4px solid #667eea;
+    transition: all 0.3s ease;
+}
+
+.info-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
+.info-item label {
+    font-weight: 600;
+    color: #64748b;
+    font-size: 0.9rem;
+    margin-bottom: 8px;
+    display: block;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.info-item p {
     margin: 0;
+    color: #1e293b;
+    font-weight: 500;
+    font-size: 1rem;
 }
 
-.card-body-modern {
-    padding: 24px;
-}
-
-.pet-avatar-large {
-    width: 120px;
-    height: 120px;
+.status-badge {
+    padding: 8px 16px;
     border-radius: 20px;
-    overflow: hidden;
-    margin: 0 auto 20px;
-    background: linear-gradient(135deg, #f1f5f9, #e2e8f0);
+    font-weight: 600;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.status-pending { background: #fef3c7; color: #92400e; }
+.status-confirmed { background: #dbeafe; color: #1e40af; }
+.status-completed { background: #dcfce7; color: #166534; }
+.status-cancelled { background: #fee2e2; color: #dc2626; }
+
+/* Pet Info Styles */
+.pet-info {
     display: flex;
     align-items: center;
-    justify-content: center;
+    gap: 20px;
+    padding: 25px;
+    background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+    border-radius: 16px;
+    border: 1px solid #0ea5e9;
 }
 
-.pet-avatar-large img {
+.pet-avatar {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    overflow: hidden;
+    border: 3px solid white;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.pet-avatar img {
     width: 100%;
     height: 100%;
     object-fit: cover;
 }
 
 .pet-placeholder {
-    font-size: 3rem;
-    color: #cbd5e1;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 2rem;
 }
 
-.pet-name {
-    font-size: 1.8rem;
+.pet-details h4 {
+    margin: 0 0 8px 0;
+    color: #0c4a6e;
     font-weight: 700;
-    color: #1e293b;
-    margin-bottom: 16px;
 }
 
-.pet-rating {
+.pet-meta {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 10px;
+}
+
+.pet-meta span {
+    background: rgba(14, 165, 233, 0.1);
+    color: #0369a1;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.rating-display {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.stars {
     color: #fbbf24;
-    font-size: 1.2rem;
-    margin-bottom: 20px;
 }
 
 .rating-text {
     color: #64748b;
     font-size: 0.9rem;
-    margin-left: 8px;
 }
 
-.pet-details {
-    text-align: left;
-    margin-top: 24px;
-}
-
-.detail-row {
-    display: flex;
-    justify-content: space-between;
-    padding: 8px 0;
-    border-bottom: 1px solid #f1f5f9;
-}
-
-.detail-row:last-child {
-    border-bottom: none;
-}
-
-.detail-label {
-    font-weight: 500;
-    color: #64748b;
-}
-
-.detail-value {
-    font-weight: 600;
-    color: #1e293b;
-}
-
-.owner-info {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    margin-bottom: 24px;
-}
-
-.owner-avatar {
-    width: 60px;
-    height: 60px;
-    background: linear-gradient(135deg, #667eea, #764ba2);
-    border-radius: 15px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-size: 1.5rem;
-}
-
-.owner-details h6 {
-    font-weight: 600;
-    color: #1e293b;
-    margin-bottom: 4px;
-}
-
-.contact-details {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    margin-bottom: 24px;
+/* Contact Info */
+.contact-card {
+    background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+    border-radius: 16px;
+    padding: 25px;
+    border: 1px solid #10b981;
 }
 
 .contact-item {
     display: flex;
-    align-items: flex-start;
-    gap: 12px;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid rgba(16, 185, 129, 0.2);
 }
 
-.contact-item i {
-    width: 20px;
-    color: #667eea;
-    margin-top: 4px;
+.contact-item:last-child {
+    border-bottom: none;
 }
 
 .contact-label {
-    display: block;
-    font-size: 0.8rem;
-    color: #9ca3af;
+    font-weight: 600;
+    color: #064e3b;
+    font-size: 0.9rem;
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
 
 .contact-value {
-    display: block;
     font-weight: 500;
-    color: #374151;
+    color: #065f46;
 }
 
 .contact-actions {
     display: flex;
-    gap: 12px;
+    gap: 10px;
+    margin-top: 20px;
 }
 
 .contact-actions .btn {
@@ -852,11 +345,20 @@ include_once '../includes/header.php';
     font-size: 0.9rem;
 }
 
+/* Summary Card */
+.summary-card {
+    background: linear-gradient(135deg, #fefce8 0%, #fef3c7 100%);
+    border-radius: 16px;
+    padding: 25px;
+    border: 1px solid #f59e0b;
+}
+
 .summary-item {
     display: flex;
     justify-content: space-between;
+    align-items: center;
     padding: 12px 0;
-    border-bottom: 1px solid #f1f5f9;
+    border-bottom: 1px solid rgba(245, 158, 11, 0.2);
 }
 
 .summary-item:last-child {
@@ -866,34 +368,35 @@ include_once '../includes/header.php';
 .summary-item.total {
     padding-top: 16px;
     margin-top: 8px;
-    border-top: 2px solid #e5e7eb;
+    border-top: 2px solid #f59e0b;
 }
 
 .summary-label {
-    color: #64748b;
-    font-weight: 500;
+    font-weight: 600;
+    color: #92400e;
+    font-size: 0.9rem;
 }
 
 .summary-value {
     font-weight: 600;
-    color: #1e293b;
+    color: #b45309;
 }
 
 .total-value {
     font-size: 1.3rem;
-    color: #667eea !important;
+    color: #92400e !important;
 }
 
 .summary-divider {
     height: 1px;
-    background: #e5e7eb;
+    background: rgba(245, 158, 11, 0.3);
     margin: 16px 0;
 }
 
 .payment-status {
     margin-top: 20px;
     padding-top: 20px;
-    border-top: 1px solid #f1f5f9;
+    border-top: 1px solid rgba(245, 158, 11, 0.3);
 }
 
 .payment-badge {
@@ -910,9 +413,11 @@ include_once '../includes/header.php';
 .payment-badge.pending { background: #fef3c7; color: #92400e; }
 
 .payment-details {
-    color: #64748b;
+    color: #92400e;
+    font-size: 0.9rem;
 }
 
+/* Timeline */
 .booking-timeline-section {
     padding: 60px 0 80px;
     background: #f8f9ff;
@@ -929,10 +434,11 @@ include_once '../includes/header.php';
     display: flex;
     align-items: center;
     gap: 16px;
-    background: #f8f9ff;
+    background: white;
     padding: 20px;
     border-radius: 16px;
     border-left: 4px solid #667eea;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
 }
 
 .schedule-icon {
@@ -1025,174 +531,386 @@ include_once '../includes/header.php';
     line-height: 1.6;
 }
 
-.action-section {
-    margin-bottom: 32px;
-    padding-bottom: 24px;
-    border-bottom: 1px solid #f1f5f9;
-}
-
-.action-section:last-child {
-    border-bottom: none;
-    margin-bottom: 0;
-}
-
-.action-section h6 {
-    font-weight: 600;
-    color: #1e293b;
-    margin-bottom: 8px;
-}
-
-.action-buttons {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-
-.countdown-timer {
-    background: #f0f9ff;
-    border-radius: 12px;
-    padding: 16px;
-    text-align: center;
-    border-left: 4px solid #3b82f6;
-}
-
-.countdown {
-    color: #1e40af;
-    font-weight: 600;
-}
-
-.countdown.active {
-    color: #059669;
-    background: #dcfce7;
-    padding: 8px 16px;
-    border-radius: 8px;
-    border-left: 4px solid #10b981;
-}
-
-.quick-actions h6 {
-    font-weight: 600;
-    color: #1e293b;
-    margin-bottom: 16px;
-}
-
-.quick-action-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-}
-
-.quick-action-btn {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    padding: 16px 12px;
-    background: #f8f9ff;
-    border: 2px solid #f1f5f9;
-    border-radius: 12px;
-    color: #64748b;
-    text-decoration: none;
-    transition: all 0.3s ease;
-    cursor: pointer;
-}
-
-.quick-action-btn:hover {
-    color: #667eea;
-    border-color: #667eea;
+/* Status Update Form */
+.status-update-form {
     background: white;
-    transform: translateY(-2px);
+    padding: 25px;
+    border-radius: 16px;
+    border: 1px solid #e5e7eb;
+    margin-bottom: 30px;
 }
 
-.quick-action-btn i {
-    font-size: 1.2rem;
+.form-group {
+    margin-bottom: 20px;
 }
 
-.quick-action-btn span {
-    font-size: 0.8rem;
-    font-weight: 500;
+.form-label {
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 8px;
+    display: block;
 }
 
-.modern-modal .modal-content {
-    border-radius: 20px;
-    border: none;
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
-}
-
-.modern-modal .modal-header {
-    border-bottom: 1px solid #f1f5f9;
-    padding: 24px;
-}
-
-.modern-modal .modal-body {
-    padding: 24px;
-}
-
-.modern-modal .modal-footer {
-    border-top: 1px solid #f1f5f9;
-    padding: 24px;
-}
-
-.booking-summary-modal {
-    background: #f8f9ff;
+.form-select {
+    width: 100%;
+    padding: 12px 16px;
+    border: 2px solid #e5e7eb;
     border-radius: 12px;
-    padding: 20px;
-    margin-top: 20px;
+    font-size: 1rem;
+    transition: all 0.3s ease;
 }
 
-.summary-row {
-    display: flex;
-    justify-content: space-between;
-    padding: 8px 0;
-    border-bottom: 1px solid #e5e7eb;
+.form-select:focus {
+    border-color: #667eea;
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
-.summary-row:last-child {
-    border-bottom: none;
-    padding-bottom: 0;
+.btn-primary {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    border: none;
+    padding: 12px 24px;
+    border-radius: 12px;
+    color: white;
+    font-weight: 600;
+    transition: all 0.3s ease;
 }
 
-@media (max-width: 991px) {
-    .booking-title {
-        font-size: 2.5rem;
-    }
-    
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
     .schedule-grid {
         grid-template-columns: 1fr;
     }
     
-    .quick-action-grid {
+    .info-grid {
         grid-template-columns: 1fr;
     }
     
-    .contact-actions {
-        flex-direction: column;
-    }
-}
-
-@media (max-width: 768px) {
-    .booking-details-header-section {
-        text-align: center;
-    }
-    
-    .booking-info-section {
-        margin-top: -20px;
-    }
-    
-    .action-buttons {
-        gap: 8px;
-    }
-    
-    .card-body-modern {
-        padding: 20px;
-    }
-    
-    .timeline-item {
+    .pet-info {
         flex-direction: column;
         text-align: center;
-        gap: 8px;
+    }
+    
+    .pet-meta {
+        justify-content: center;
     }
 }
 </style>
+
+<!-- Modern Page Header -->
+<section class="page-header-modern">
+    <div class="container">
+        <div class="row align-items-center">
+            <div class="col-lg-12 text-center">
+                <span class="page-badge">🐾 Booking Management</span>
+                <h1 class="page-title">Booking <span class="text-gradient">#<?php echo $booking_id; ?></span></h1>
+                <p class="page-subtitle">Manage your pet sitting appointment details</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Booking Details Content -->
+<section class="booking-details-section">
+    <div class="container">
+        <div class="row">
+            <!-- Main Content -->
+            <div class="col-lg-8">
+                <!-- Booking Status Update -->
+                <?php if ($booking['status'] == 'Pending' || $booking['status'] == 'Confirmed'): ?>
+                    <div class="info-card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-edit me-2"></i> Update Booking Status</h5>
+                        </div>
+                        <div class="info-content">
+                            <form method="POST" class="status-update-form" style="background: none; padding: 0; border: none; margin: 0;">
+                                <div class="form-group">
+                                    <label for="new_status" class="form-label">Change Status:</label>
+                                    <select name="new_status" id="new_status" class="form-select" required>
+                                        <option value="">Select new status...</option>
+                                        <?php if ($booking['status'] == 'Pending'): ?>
+                                            <option value="Confirmed">Accept Booking</option>
+                                            <option value="Cancelled">Decline Booking</option>
+                                        <?php elseif ($booking['status'] == 'Confirmed'): ?>
+                                            <option value="Completed">Mark as Completed</option>
+                                            <option value="Cancelled">Cancel Booking</option>
+                                        <?php endif; ?>
+                                    </select>
+                                </div>
+                                <button type="submit" name="update_status" class="btn btn-primary">
+                                    <i class="fas fa-save me-2"></i> Update Status
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                <?php endif; ?>
+
+                <!-- Pet Information -->
+                <div class="info-card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-paw me-2"></i> Pet Information</h5>
+                    </div>
+                    <div class="info-content">
+                        <div class="pet-info">
+                            <div class="pet-avatar">
+                                <?php if (!empty($booking['petImage']) && file_exists('../assets/images/pets/' . $booking['petImage'])): ?>
+                                    <img src="../assets/images/pets/<?php echo htmlspecialchars($booking['petImage']); ?>" 
+                                         alt="<?php echo htmlspecialchars($booking['petName']); ?>">
+                                <?php else: ?>
+                                    <div class="pet-placeholder">
+                                        <i class="fas fa-paw"></i>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                            <div class="pet-details">
+                                <h4><?php echo htmlspecialchars($booking['petName']); ?></h4>
+                                <div class="pet-meta">
+                                    <span><?php echo htmlspecialchars($booking['petType']); ?></span>
+                                    <span><?php echo htmlspecialchars($booking['petBreed']); ?></span>
+                                    <span><?php echo $booking['petAge']; ?> years old</span>
+                                    <span><?php echo htmlspecialchars($booking['petSex']); ?></span>
+                                </div>
+                                <?php if ($booking['petRatingCount'] > 0): ?>
+                                    <div class="rating-display">
+                                        <div class="stars">
+                                            <?php 
+                                            $rating = round($booking['petRating']);
+                                            for ($i = 1; $i <= 5; $i++): 
+                                            ?>
+                                                <i class="fas fa-star<?php echo $i <= $rating ? '' : '-o'; ?>"></i>
+                                            <?php endfor; ?>
+                                        </div>
+                                        <span class="rating-text"><?php echo number_format($booking['petRating'], 1); ?> (<?php echo $booking['petRatingCount']; ?> reviews)</span>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pet Owner Contact -->
+                <div class="info-card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-user me-2"></i> Pet Owner Contact</h5>
+                    </div>
+                    <div class="info-content">
+                        <div class="contact-card">
+                            <div class="contact-item">
+                                <span class="contact-label">Owner Name</span>
+                                <span class="contact-value"><?php echo htmlspecialchars($booking['ownerName']); ?></span>
+                            </div>
+                            <div class="contact-item">
+                                <span class="contact-label">Email</span>
+                                <span class="contact-value"><?php echo htmlspecialchars($booking['ownerEmail']); ?></span>
+                            </div>
+                            <div class="contact-item">
+                                <span class="contact-label">Phone</span>
+                                <span class="contact-value"><?php echo htmlspecialchars($booking['ownerContact']); ?></span>
+                            </div>
+                            <div class="contact-item">
+                                <span class="contact-label">Address</span>
+                                <span class="contact-value"><?php echo htmlspecialchars($booking['ownerAddress']); ?></span>
+                            </div>
+                            <div class="contact-actions">
+                                <a href="mailto:<?php echo htmlspecialchars($booking['ownerEmail']); ?>" class="btn btn-primary btn-sm">
+                                    <i class="fas fa-envelope me-1"></i> Email
+                                </a>
+                                <a href="tel:<?php echo htmlspecialchars($booking['ownerContact']); ?>" class="btn btn-success btn-sm">
+                                    <i class="fas fa-phone me-1"></i> Call
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Booking Details -->
+                <div class="info-card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-calendar me-2"></i> Booking Details</h5>
+                    </div>
+                    <div class="info-content">
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <label>Booking Status</label>
+                                <p><span class="status-badge status-<?php echo strtolower($booking['status']); ?>"><?php echo $booking['status']; ?></span></p>
+                            </div>
+                            
+                            <div class="info-item">
+                                <label>Booking Date</label>
+                                <p><?php echo date('M d, Y', strtotime($booking['checkInDate'])); ?></p>
+                            </div>
+                            
+                            <div class="info-item">
+                                <label>Check-in Time</label>
+                                <p><?php echo date('g:i A', strtotime($booking['checkInTime'])); ?></p>
+                            </div>
+                            
+                            <div class="info-item">
+                                <label>Check-out Time</label>
+                                <p><?php echo date('g:i A', strtotime($booking['checkOutTime'])); ?> on <?php echo date('M d, Y', strtotime($booking['checkOutDate'])); ?></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="col-lg-4">
+                <!-- Cost Summary -->
+                <div class="summary-card">
+                    <h5 class="mb-3"><i class="fas fa-calculator me-2"></i> Cost Summary</h5>
+                    
+                    <div class="summary-item">
+                        <span class="summary-label">Duration</span>
+                        <span class="summary-value">
+                            <?php 
+                            $duration = '';
+                            if ($interval->days > 0) {
+                                $duration .= $interval->days . ' day' . ($interval->days > 1 ? 's' : '') . ' ';
+                            }
+                            
+                            if ($interval->h > 0) {
+                                $duration .= $interval->h . ' hour' . ($interval->h > 1 ? 's' : '') . ' ';
+                            }
+                            
+                            if (empty($duration) && $interval->i > 0) {
+                                $duration .= $interval->i . ' minute' . ($interval->i > 1 ? 's' : '') . ' ';
+                            }
+                            
+                            echo trim($duration);
+                            ?>
+                        </span>
+                    </div>
+                    
+                    <div class="summary-item">
+                        <span class="summary-label">Your Hourly Rate</span>
+                        <span class="summary-value">Rs. <?php echo number_format($hourly_rate, 2); ?></span>
+                    </div>
+                    
+                    <div class="summary-item">
+                        <span class="summary-label">Total Hours</span>
+                        <span class="summary-value"><?php echo number_format($total_hours, 1); ?> hours</span>
+                    </div>
+                    
+                    <div class="summary-divider"></div>
+                    
+                    <div class="summary-item total">
+                        <span class="summary-label">Total Value</span>
+                        <span class="summary-value total-value">Rs. <?php echo number_format($total_cost, 2); ?></span>
+                    </div>
+                    
+                    <div class="payment-status">
+                        <?php if ($payment): ?>
+                            <div class="payment-info">
+                                <div class="payment-badge <?php echo strtolower($payment['status']); ?>">
+                                    <i class="fas fa-credit-card me-1"></i>
+                                    Payment <?php echo $payment['status']; ?>
+                                </div>
+                                <div class="payment-details">
+                                    <small>Amount: Rs. <?php echo number_format($payment['amount'], 2); ?></small><br>
+                                    <small>Date: <?php echo date('M d, Y', strtotime($payment['paymentDate'])); ?></small>
+                                </div>
+                            </div>
+                        <?php else: ?>
+                            <div class="payment-badge pending">
+                                <i class="fas fa-clock me-1"></i>
+                                Payment Pending
+                            </div>
+                            <div class="payment-details">
+                                <small>Payment will be processed once booking is confirmed</small>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Timeline Section -->
+<section class="booking-timeline-section">
+    <div class="container">
+        <h3 class="text-center mb-4">Booking Schedule</h3>
+        
+        <!-- Schedule Info -->
+        <div class="schedule-grid">
+            <div class="schedule-item">
+                <div class="schedule-icon checkin">
+                    <i class="fas fa-play"></i>
+                </div>
+                <div class="schedule-content">
+                    <h6>Check-in</h6>
+                    <div class="schedule-date"><?php echo date('l, F d, Y', strtotime($booking['checkInDate'])); ?></div>
+                    <p class="schedule-time"><?php echo date('g:i A', strtotime($booking['checkInTime'])); ?></p>
+                </div>
+            </div>
+            
+            <div class="schedule-item">
+                <div class="schedule-icon checkout">
+                    <i class="fas fa-stop"></i>
+                </div>
+                <div class="schedule-content">
+                    <h6>Check-out</h6>
+                    <div class="schedule-date"><?php echo date('l, F d, Y', strtotime($booking['checkOutDate'])); ?></div>
+                    <p class="schedule-time"><?php echo date('g:i A', strtotime($booking['checkOutTime'])); ?></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Booking Timeline -->
+        <div class="booking-timeline">
+            <h5 class="mb-3">Booking Timeline</h5>
+            
+            <div class="timeline-item">
+                <div class="timeline-marker booking-created">
+                    <i class="fas fa-calendar-plus"></i>
+                </div>
+                <div class="timeline-content">
+                    <h6>Booking Created</h6>
+                    <p>Booking request submitted by <?php echo htmlspecialchars($booking['ownerName']); ?></p>
+                </div>
+            </div>
+            
+            <?php if ($booking['status'] != 'Pending'): ?>
+                <div class="timeline-item">
+                    <div class="timeline-marker status-updated">
+                        <i class="fas fa-edit"></i>
+                    </div>
+                    <div class="timeline-content">
+                        <h6>Status Updated to <?php echo $booking['status']; ?></h6>
+                        <p>Updated by you</p>
+                    </div>
+                </div>
+            <?php endif; ?>
+            
+            <?php if ($payment): ?>
+                <div class="timeline-item">
+                    <div class="timeline-marker payment-received">
+                        <i class="fas fa-dollar-sign"></i>
+                    </div>
+                    <div class="timeline-content">
+                        <h6>Payment Received</h6>
+                        <p>Rs. <?php echo number_format($payment['amount'], 2); ?> via <?php echo ucfirst($payment['payment_method']); ?></p>
+                    </div>
+                </div>
+            <?php endif; ?>
+        </div>
+        
+        <?php if (!empty($booking['additionalInformation'])): ?>
+            <div class="additional-info">
+                <h6><i class="fas fa-info-circle me-2"></i> Special Instructions</h6>
+                <div class="info-content">
+                    <?php echo nl2br(htmlspecialchars($booking['additionalInformation'])); ?>
+                </div>
+            </div>
+        <?php endif; ?>
+    </div>
+</section>
 
 <?php
 // Include footer

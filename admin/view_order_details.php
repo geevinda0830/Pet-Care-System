@@ -508,7 +508,7 @@ include_once '../includes/header.php';
                 <div class="summary-icon icon-total">
                     <i class="fas fa-money-bill-wave"></i>
                 </div>
-                <div class="summary-value">₱<?php echo number_format($order_total, 2); ?></div>
+                <div class="summary-value">Rs.<?php echo number_format($order_total, 2); ?></div>
                 <div class="summary-label">Order Total</div>
             </div>
         </div>
@@ -613,9 +613,9 @@ include_once '../includes/header.php';
                                                 </div>
                                             </div>
                                         </td>
-                                        <td>₱<?php echo number_format($item['price'], 2); ?></td>
+                                        <td>Rs.<?php echo number_format($item['price'], 2); ?></td>
                                         <td><?php echo $item['quantity']; ?></td>
-                                        <td>₱<?php echo number_format($item['subtotal'], 2); ?></td>
+                                        <td>Rs.<?php echo number_format($item['subtotal'], 2); ?></td>
                                     </tr>
                                 <?php endforeach; ?>
                             </tbody>
@@ -626,7 +626,7 @@ include_once '../includes/header.php';
                     <div class="order-total-section">
                         <div class="total-row">
                             <span class="total-label">Subtotal:</span>
-                            <span class="total-value">₱<?php echo number_format($order_total, 2); ?></span>
+                            <span class="total-value">Rs.<?php echo number_format($order_total, 2); ?></span>
                         </div>
                         <div class="total-row">
                             <span class="total-label">Shipping:</span>
@@ -634,7 +634,7 @@ include_once '../includes/header.php';
                         </div>
                         <div class="total-row">
                             <span class="total-label">Total:</span>
-                            <span class="total-value">₱<?php echo number_format($order_total, 2); ?></span>
+                            <span class="total-value">Rs.<?php echo number_format($order_total, 2); ?></span>
                         </div>
                     </div>
                 <?php endif; ?>
@@ -665,7 +665,7 @@ include_once '../includes/header.php';
                                 <i class="fas fa-money-bill-wave"></i>
                             </div>
                             <h6>Amount Paid</h6>
-                            <p>₱<?php echo number_format($payment['amount'] ?? $order_total, 2); ?></p>
+                            <p>Rs.<?php echo number_format($payment['amount'] ?? $order_total, 2); ?></p>
                         </div>
                         
                         <div class="payment-item">

@@ -1,146 +1,169 @@
+<?php
+// Start session if not already started
+if (session_status() == PHP_SESSION_NONE) {
+    session_start();
+}
+
+// Check if user is logged in
+if (!isset($_SESSION['user_id'])) {
+    $_SESSION['error_message'] = "You must be logged in to make a payment.";
+    header("Location: login.php");
+    exit();
+}
+
+// Include database connection
+require_once 'config/db_connect.php';
+
+// Get payment type (cart or booking)
+$payment_type = $_GET['type'] ?? 'cart';
+$booking_id = $_GET['booking_id'] ?? null;
+
+// Get user information
+$user_sql = "SELECT * FROM pet_owner WHERE userID = ?";
+$user_stmt = $conn->prepare($user_sql);
+$user_stmt->bind_param("i", $_SESSION['user_id']);
+$user_stmt->execute();
+$user_result = $user_stmt->get_result();
+$user = $user_result->fetch_assoc();
+$user_stmt->close();
+
+// Initialize variables
+$order_items = [];
+$total_amount = 0;
+$booking_details = null;
+
+if ($payment_type === 'booking' && $booking_id) {
+    // Get booking details
+    $booking_sql = "SELECT b.*, ps.price as hourly_rate, ps.fullName as sitterName,
+                           p.petName, p.type as petType, p.breed as petBreed
+                    FROM booking b 
+                    JOIN pet_sitter ps ON b.sitterID = ps.userID
+                    JOIN pet_profile p ON b.petID = p.petID
+                    WHERE b.bookingID = ? AND b.userID = ?";
+    $booking_stmt = $conn->prepare($booking_sql);
+    $booking_stmt->bind_param("ii", $booking_id, $_SESSION['user_id']);
+    $booking_stmt->execute();
+    $booking_result = $booking_stmt->get_result();
+    
+    if ($booking_result->num_rows > 0) {
+        $booking_details = $booking_result->fetch_assoc();
+        
+        // Calculate booking cost
+        $check_in = new DateTime($booking_details['checkInDate'] . ' ' . $booking_details['checkInTime']);
+        $check_out = new DateTime($booking_details['checkOutDate'] . ' ' . $booking_details['checkOutTime']);
+        $interval = $check_in->diff($check_out);
+        $total_hours = $interval->days * 24 + $interval->h + ($interval->i / 60);
+        $total_amount = $total_hours * $booking_details['hourly_rate'];
+    }
+    $booking_stmt->close();
+} else {
+    // Get cart items for regular payment
+    $cart_sql = "SELECT c.*, 
+                        (SELECT SUM(ci.quantity * ci.price) FROM cart_items ci WHERE ci.cartID = c.cartID) as calculated_total
+                 FROM cart c 
+                 WHERE c.userID = ? AND c.status = 'active'";
+    $cart_stmt = $conn->prepare($cart_sql);
+    $cart_stmt->bind_param("i", $_SESSION['user_id']);
+    $cart_stmt->execute();
+    $cart_result = $cart_stmt->get_result();
+    
+    if ($cart_result->num_rows > 0) {
+        $cart = $cart_result->fetch_assoc();
+        $total_amount = $cart['calculated_total'] ?? $cart['total_amount'];
+        
+        // Get cart items
+        $items_sql = "SELECT ci.*, p.name, p.brand, p.image, p.category 
+                      FROM cart_items ci 
+                      JOIN pet_food_and_accessories p ON ci.productID = p.productID 
+                      WHERE ci.cartID = ?";
+        $items_stmt = $conn->prepare($items_sql);
+        $items_stmt->bind_param("i", $cart['cartID']);
+        $items_stmt->execute();
+        $items_result = $items_stmt->get_result();
+        
+        while ($row = $items_result->fetch_assoc()) {
+            $row['subtotal'] = $row['quantity'] * $row['price'];
+            $order_items[] = $row;
+        }
+        $items_stmt->close();
+    }
+    $cart_stmt->close();
+}
+
+// Include header
+include_once 'includes/header.php';
+?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Payment - Pet Care System</title>
+    <title>Payment - Pet Care & Sitting System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             min-height: 100vh;
-            padding: 20px;
         }
 
         .payment-container {
             max-width: 1200px;
             margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        .payment-header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+        }
+
+        .payment-header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+
+        .payment-header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .payment-content {
             display: grid;
             grid-template-columns: 1fr 400px;
             gap: 30px;
-            min-height: calc(100vh - 40px);
+            align-items: start;
         }
 
         .payment-form-section {
             background: white;
             border-radius: 20px;
             padding: 40px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-            height: fit-content;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
         }
 
         .order-summary-section {
             background: white;
             border-radius: 20px;
             padding: 30px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
             height: fit-content;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-        }
-
-        .form-header {
-            text-align: center;
-            margin-bottom: 40px;
-        }
-
-        .form-header h1 {
-            color: #2d3748;
-            font-size: 2.5rem;
-            font-weight: 700;
-            margin-bottom: 10px;
-        }
-
-        .form-header p {
-            color: #718096;
-            font-size: 1.1rem;
-        }
-
-        .progress-bar {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 40px;
-            position: relative;
-        }
-
-        .progress-bar::before {
-            content: '';
-            position: absolute;
+            position: sticky;
             top: 20px;
-            left: 0;
-            right: 0;
-            height: 3px;
-            background: #e2e8f0;
-            z-index: 1;
-        }
-
-        .progress-bar::after {
-            content: '';
-            position: absolute;
-            top: 20px;
-            left: 0;
-            width: 66.66%;
-            height: 3px;
-            background: #667eea;
-            z-index: 2;
-            transition: width 0.3s ease;
-        }
-
-        .progress-step {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            position: relative;
-            z-index: 3;
-        }
-
-        .step-circle {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            margin-bottom: 8px;
-            transition: all 0.3s ease;
-        }
-
-        .step-circle.active {
-            background: #667eea;
-            color: white;
-        }
-
-        .step-circle.completed {
-            background: #48bb78;
-            color: white;
-        }
-
-        .step-circle.inactive {
-            background: #e2e8f0;
-            color: #a0aec0;
-        }
-
-        .step-label {
-            font-size: 0.9rem;
-            color: #4a5568;
-            font-weight: 500;
-        }
-
-        .payment-methods {
-            margin-bottom: 30px;
         }
 
         .section-title {
             font-size: 1.5rem;
-            color: #2d3748;
-            margin-bottom: 20px;
-            font-weight: 600;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 25px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
 
         .payment-options {
@@ -151,30 +174,24 @@
         }
 
         .payment-option {
-            border: 2px solid #e2e8f0;
-            border-radius: 12px;
+            border: 2px solid #e5e7eb;
+            border-radius: 15px;
             padding: 20px;
             text-align: center;
             cursor: pointer;
             transition: all 0.3s ease;
-            position: relative;
-            background: white;
+            background: #f8fafc;
         }
 
         .payment-option:hover {
             border-color: #667eea;
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.15);
+            background: #f0f9ff;
         }
 
-        .payment-option.selected {
+        .payment-option.active {
             border-color: #667eea;
-            background: #f7fafc;
-            transform: translateY(-2px);
-        }
-
-        .payment-option input[type="radio"] {
-            display: none;
+            background: #f0f9ff;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
         }
 
         .payment-option i {
@@ -183,207 +200,62 @@
             margin-bottom: 10px;
         }
 
-        .payment-option label {
-            display: block;
+        .payment-option h6 {
             font-weight: 600;
-            color: #2d3748;
-            cursor: pointer;
+            color: #1e293b;
+            margin: 0;
         }
 
         .card-details {
             display: none;
-            animation: fadeIn 0.5s ease;
+            background: #f8fafc;
+            border-radius: 15px;
+            padding: 25px;
+            margin-top: 20px;
         }
 
         .card-details.active {
             display: block;
         }
 
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
         .form-group {
-            margin-bottom: 25px;
+            margin-bottom: 20px;
         }
 
-        .form-group label {
-            display: block;
-            margin-bottom: 8px;
-            color: #2d3748;
+        .form-label {
             font-weight: 600;
+            color: #374151;
+            margin-bottom: 8px;
+            display: block;
         }
 
-        .form-input {
-            width: 100%;
+        .form-control {
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
             padding: 15px;
-            border: 2px solid #e2e8f0;
-            border-radius: 10px;
             font-size: 1rem;
             transition: all 0.3s ease;
-            background: white;
         }
 
-        .form-input:focus {
-            outline: none;
+        .form-control:focus {
             border-color: #667eea;
             box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
 
-        .form-input.error {
-            border-color: #e53e3e;
-            background: #fed7d7;
-        }
-
-        .form-input.success {
-            border-color: #48bb78;
-            background: #f0fff4;
-        }
-
-        .input-group {
+        .form-row {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: 1fr 120px;
             gap: 15px;
         }
 
-        .card-preview {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 15px;
-            padding: 25px;
-            color: white;
-            margin-bottom: 30px;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .card-preview::before {
-            content: '';
-            position: absolute;
-            top: -50%;
-            right: -50%;
-            width: 100%;
-            height: 100%;
-            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="20" cy="20" r="2" fill="rgba(255,255,255,0.1)"/><circle cx="80" cy="40" r="1" fill="rgba(255,255,255,0.1)"/><circle cx="40" cy="80" r="3" fill="rgba(255,255,255,0.1)"/></svg>');
-            animation: float 20s infinite linear;
-        }
-
-        .card-number {
-            font-size: 1.5rem;
-            font-weight: 600;
-            letter-spacing: 3px;
-            margin-bottom: 20px;
-            font-family: 'Courier New', monospace;
-        }
-
-        .card-info {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .card-holder {
-            font-size: 1rem;
-            opacity: 0.9;
-        }
-
-        .card-expiry {
-            font-size: 1rem;
-            opacity: 0.9;
-        }
-
-        .card-type {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            font-size: 2rem;
-        }
-
-        .error-message {
-            color: #e53e3e;
-            font-size: 0.9rem;
-            margin-top: 5px;
-            display: none;
-        }
-
-        .success-message {
-            color: #48bb78;
-            font-size: 0.9rem;
-            margin-top: 5px;
-            display: none;
-        }
-
-        .security-info {
-            background: #f7fafc;
-            border-radius: 10px;
-            padding: 20px;
-            margin-bottom: 30px;
-            border-left: 4px solid #667eea;
-        }
-
-        .security-info h4 {
-            color: #2d3748;
-            margin-bottom: 10px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .security-info p {
-            color: #4a5568;
-            font-size: 0.9rem;
-        }
-
-        .pay-button {
-            width: 100%;
-            padding: 18px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            border-radius: 12px;
-            font-size: 1.2rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .pay-button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
-        }
-
-        .pay-button:active {
-            transform: translateY(0);
-        }
-
-        .pay-button.loading {
-            pointer-events: none;
-        }
-
-        .pay-button .spinner {
-            display: none;
-            animation: spin 1s linear infinite;
-        }
-
-        .pay-button.loading .spinner {
-            display: inline-block;
-        }
-
-        .pay-button.loading .button-text {
-            display: none;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
         .order-summary h3 {
-            color: #2d3748;
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: #1e293b;
             margin-bottom: 20px;
-            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
 
         .order-item {
@@ -391,7 +263,7 @@
             justify-content: space-between;
             align-items: center;
             padding: 15px 0;
-            border-bottom: 1px solid #e2e8f0;
+            border-bottom: 1px solid #f1f5f9;
         }
 
         .order-item:last-child {
@@ -399,23 +271,26 @@
         }
 
         .item-info h4 {
-            color: #2d3748;
-            margin-bottom: 5px;
+            font-size: 1rem;
+            font-weight: 600;
+            color: #1e293b;
+            margin: 0 0 5px 0;
         }
 
         .item-info p {
-            color: #718096;
             font-size: 0.9rem;
+            color: #64748b;
+            margin: 0;
         }
 
         .item-price {
-            font-weight: 600;
-            color: #2d3748;
+            font-weight: 700;
+            color: #667eea;
             font-size: 1.1rem;
         }
 
         .order-total {
-            border-top: 2px solid #e2e8f0;
+            border-top: 2px solid #e5e7eb;
             padding-top: 20px;
             margin-top: 20px;
             display: flex;
@@ -424,238 +299,297 @@
         }
 
         .order-total h3 {
-            color: #2d3748;
-            font-size: 1.5rem;
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #1e293b;
             margin: 0;
         }
 
         .total-amount {
-            font-size: 1.8rem;
+            font-size: 1.5rem;
             font-weight: 700;
             color: #667eea;
         }
 
-        .trust-badges {
-            display: flex;
-            justify-content: center;
-            gap: 20px;
-            margin-top: 30px;
+        .billing-info {
+            background: #f8fafc;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 30px;
         }
 
-        .trust-badge {
+        .billing-info h5 {
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 15px;
+        }
+
+        .billing-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+
+        .billing-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .pay-now-btn {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border: none;
+            border-radius: 12px;
+            padding: 15px 30px;
+            color: white;
+            font-weight: 700;
+            font-size: 1.1rem;
+            width: 100%;
+            cursor: pointer;
+            transition: all 0.3s ease;
             display: flex;
             align-items: center;
-            gap: 8px;
-            color: #718096;
-            font-size: 0.9rem;
+            justify-content: center;
+            gap: 10px;
         }
 
-        .trust-badge i {
-            color: #48bb78;
+        .pay-now-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+        }
+
+        .security-notice {
+            background: #ecfdf5;
+            border: 1px solid #10b981;
+            border-radius: 12px;
+            padding: 15px;
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .security-notice i {
+            color: #10b981;
+            margin-right: 8px;
+        }
+
+        .security-notice small {
+            color: #064e3b;
+            font-weight: 500;
         }
 
         @media (max-width: 768px) {
-            .payment-container {
+            .payment-content {
                 grid-template-columns: 1fr;
                 gap: 20px;
             }
-            
+
             .payment-form-section,
             .order-summary-section {
-                padding: 20px;
+                padding: 25px;
             }
-            
-            .form-header h1 {
-                font-size: 2rem;
+
+            .form-row {
+                grid-template-columns: 1fr;
             }
-            
+
             .payment-options {
                 grid-template-columns: 1fr;
             }
-            
-            .input-group {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        @keyframes float {
-            0% { transform: translateX(0px) rotate(0deg); }
-            33% { transform: translateX(30px) rotate(120deg); }
-            66% { transform: translateX(-20px) rotate(240deg); }
-            100% { transform: translateX(0px) rotate(360deg); }
         }
     </style>
 </head>
+
 <body>
     <div class="payment-container">
-        <div class="payment-form-section">
-            <div class="form-header">
-                <h1><i class="fas fa-paw"></i> Pet Care Payment</h1>
-                <p>Secure payment for your pet care services</p>
-            </div>
-
-            <div class="progress-bar">
-                <div class="progress-step">
-                    <div class="step-circle completed">1</div>
-                    <div class="step-label">Service</div>
-                </div>
-                <div class="progress-step">
-                    <div class="step-circle completed">2</div>
-                    <div class="step-label">Details</div>
-                </div>
-                <div class="progress-step">
-                    <div class="step-circle active">3</div>
-                    <div class="step-label">Payment</div>
-                </div>
-                <div class="progress-step">
-                    <div class="step-circle inactive">4</div>
-                    <div class="step-label">Confirmation</div>
-                </div>
-            </div>
-
-            <form id="paymentForm">
-                <div class="payment-methods">
-                    <h3 class="section-title">Choose Payment Method</h3>
-                    <div class="payment-options">
-                        <div class="payment-option selected" data-method="credit_card">
-                            <input type="radio" id="credit_card" name="payment_method" value="credit_card" checked>
-                            <label for="credit_card">
-                                <i class="fas fa-credit-card"></i>
-                                Credit Card
-                            </label>
-                        </div>
-                        <div class="payment-option" data-method="paypal">
-                            <input type="radio" id="paypal" name="payment_method" value="paypal">
-                            <label for="paypal">
-                                <i class="fab fa-paypal"></i>
-                                PayPal
-                            </label>
-                        </div>
-                        <div class="payment-option" data-method="bank_transfer">
-                            <input type="radio" id="bank_transfer" name="payment_method" value="bank_transfer">
-                            <label for="bank_transfer">
-                                <i class="fas fa-university"></i>
-                                Bank Transfer
-                            </label>
-                        </div>
-                    </div>
-                </div>
-
-                <div id="credit_card_details" class="card-details active">
-                    <div class="card-preview">
-                        <div class="card-type">
-                            <i class="fab fa-cc-visa"></i>
-                        </div>
-                        <div class="card-number" id="preview-number">•••• •••• •••• ••••</div>
-                        <div class="card-info">
-                            <div class="card-holder" id="preview-holder">CARDHOLDER NAME</div>
-                            <div class="card-expiry" id="preview-expiry">MM/YY</div>
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="card_holder">Cardholder Name</label>
-                        <input type="text" id="card_holder" name="card_holder" class="form-input" placeholder="John Doe">
-                        <div class="error-message" id="card_holder_error"></div>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="card_number">Card Number</label>
-                        <input type="text" id="card_number" name="card_number" class="form-input" placeholder="1234 5678 9012 3456" maxlength="19">
-                        <div class="error-message" id="card_number_error"></div>
-                    </div>
-
-                    <div class="input-group">
-                        <div class="form-group">
-                            <label for="expiry_date">Expiry Date</label>
-                            <input type="text" id="expiry_date" name="expiry_date" class="form-input" placeholder="MM/YY" maxlength="5">
-                            <div class="error-message" id="expiry_error"></div>
-                        </div>
-                        <div class="form-group">
-                            <label for="cvv">CVV</label>
-                            <input type="text" id="cvv" name="cvv" class="form-input" placeholder="123" maxlength="4">
-                            <div class="error-message" id="cvv_error"></div>
-                        </div>
-                    </div>
-
-                    <div class="security-info">
-                        <h4><i class="fas fa-shield-alt"></i> Secure Payment</h4>
-                        <p>Your payment information is encrypted and secure. We use industry-standard SSL encryption to protect your data.</p>
-                    </div>
-                </div>
-
-                <div id="paypal_details" class="card-details">
-                    <div class="security-info">
-                        <h4><i class="fab fa-paypal"></i> PayPal Payment</h4>
-                        <p>You will be redirected to PayPal to complete your payment securely.</p>
-                    </div>
-                </div>
-
-                <div id="bank_transfer_details" class="card-details">
-                    <div class="security-info">
-                        <h4><i class="fas fa-university"></i> Bank Transfer</h4>
-                        <p>Bank transfer instructions will be provided after clicking "Pay Now".</p>
-                    </div>
-                </div>
-
-                <button type="submit" class="pay-button" id="payButton">
-                    <span class="button-text">
-                        <i class="fas fa-lock"></i> Pay Now - $149.99
-                    </span>
-                    <span class="spinner">
-                        <i class="fas fa-spinner"></i>
-                    </span>
-                </button>
-
-                <div class="trust-badges">
-                    <div class="trust-badge">
-                        <i class="fas fa-shield-alt"></i>
-                        SSL Secured
-                    </div>
-                    <div class="trust-badge">
-                        <i class="fas fa-lock"></i>
-                        256-bit Encryption
-                    </div>
-                    <div class="trust-badge">
-                        <i class="fas fa-check-circle"></i>
-                        PCI Compliant
-                    </div>
-                </div>
-            </form>
+        <!-- Payment Header -->
+        <div class="payment-header">
+            <h1><i class="fas fa-credit-card me-3"></i>Secure Payment</h1>
+            <p>Complete your <?php echo $payment_type === 'booking' ? 'booking' : 'order'; ?> with our secure payment system</p>
         </div>
 
-        <div class="order-summary-section">
-            <div class="order-summary">
-                <h3><i class="fas fa-receipt"></i> Order Summary</h3>
-                
-                <div class="order-item">
-                    <div class="item-info">
-                        <h4>Pet Sitting Service</h4>
-                        <p>Golden Retriever - Max</p>
-                        <p>March 15-17, 2024 (3 days)</p>
-                    </div>
-                    <div class="item-price">$120.00</div>
-                </div>
+        <div class="payment-content">
+            <!-- Payment Form -->
+            <div class="payment-form-section">
+                <h2 class="section-title">
+                    <i class="fas fa-lock"></i>
+                    Payment Details
+                </h2>
 
-                <div class="order-item">
-                    <div class="item-info">
-                        <h4>Additional Services</h4>
-                        <p>Dog Walking & Feeding</p>
-                    </div>
-                    <div class="item-price">$25.00</div>
-                </div>
+                <form id="paymentForm" method="POST" action="process_payment.php">
+                    <input type="hidden" name="payment_type" value="<?php echo $payment_type; ?>">
+                    <?php if ($booking_id): ?>
+                        <input type="hidden" name="booking_id" value="<?php echo $booking_id; ?>">
+                    <?php endif; ?>
+                    <input type="hidden" name="total_amount" value="<?php echo $total_amount; ?>">
 
-                <div class="order-item">
-                    <div class="item-info">
-                        <h4>Service Fee</h4>
-                        <p>Platform fee</p>
+                    <!-- Payment Method Selection -->
+                    <div class="form-group">
+                        <label class="form-label">Select Payment Method</label>
+                        <div class="payment-options">
+                            <div class="payment-option active" data-method="credit_card">
+                                <i class="fas fa-credit-card"></i>
+                                <h6>Credit Card</h6>
+                            </div>
+                            <div class="payment-option" data-method="debit_card">
+                                <i class="fas fa-money-check-alt"></i>
+                                <h6>Debit Card</h6>
+                            </div>
+                            <div class="payment-option" data-method="paypal">
+                                <i class="fab fa-paypal"></i>
+                                <h6>PayPal</h6>
+                            </div>
+                            <div class="payment-option" data-method="bank_transfer">
+                                <i class="fas fa-university"></i>
+                                <h6>Bank Transfer</h6>
+                            </div>
+                        </div>
+                        <input type="hidden" name="payment_method" id="payment_method" value="credit_card">
                     </div>
-                    <div class="item-price">$4.99</div>
-                </div>
 
-                <div class="order-total">
-                    <h3>Total</h3>
-                    <div class="total-amount">$149.99</div>
+                    <!-- Card Details -->
+                    <div class="card-details active" id="card_details">
+                        <div class="form-group">
+                            <label for="card_name" class="form-label">Cardholder Name</label>
+                            <input type="text" class="form-control" id="card_name" name="card_name" 
+                                   placeholder="John Doe" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="card_number" class="form-label">Card Number</label>
+                            <input type="text" class="form-control" id="card_number" name="card_number" 
+                                   placeholder="1234 5678 9012 3456" maxlength="19" required>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="expiry_date" class="form-label">Expiry Date</label>
+                                <input type="text" class="form-control" id="expiry_date" name="expiry_date" 
+                                       placeholder="MM/YY" maxlength="5" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="cvv" class="form-label">CVV</label>
+                                <input type="text" class="form-control" id="cvv" name="cvv" 
+                                       placeholder="123" maxlength="4" required>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Billing Information -->
+                    <div class="billing-info">
+                        <h5><i class="fas fa-map-marker-alt me-2"></i>Billing Address</h5>
+                        <div class="form-group">
+                            <label for="billing_address" class="form-label">Address</label>
+                            <input type="text" class="form-control" id="billing_address" name="billing_address" 
+                                   value="<?php echo htmlspecialchars($user['address'] ?? ''); ?>" required>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="billing_city" class="form-label">City</label>
+                                <input type="text" class="form-control" id="billing_city" name="billing_city" 
+                                       placeholder="Colombo" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="billing_postal" class="form-label">Postal Code</label>
+                                <input type="text" class="form-control" id="billing_postal" name="billing_postal" 
+                                       placeholder="00100" required>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Pay Now Button -->
+                    <button type="submit" class="pay-now-btn">
+                        <i class="fas fa-lock"></i>
+                        Pay Now - Rs. <?php echo number_format($total_amount, 2); ?>
+                    </button>
+
+                    <div class="security-notice">
+                        <i class="fas fa-shield-alt"></i>
+                        <small>Your payment information is encrypted and secure</small>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Order Summary -->
+            <div class="order-summary-section">
+                <div class="order-summary">
+                    <h3><i class="fas fa-receipt"></i> Order Summary</h3>
+                    
+                    <?php if ($payment_type === 'booking' && $booking_details): ?>
+                        <!-- Booking Summary -->
+                        <div class="order-item">
+                            <div class="item-info">
+                                <h4>Pet Sitting Service</h4>
+                                <p><?php echo htmlspecialchars($booking_details['petType'] . ' - ' . $booking_details['petName']); ?></p>
+                                <p><?php echo date('M d-d, Y', strtotime($booking_details['checkInDate'])); ?></p>
+                            </div>
+                            <div class="item-price">Rs. <?php echo number_format($total_amount * 0.8, 2); ?></div>
+                        </div>
+
+                        <div class="order-item">
+                            <div class="item-info">
+                                <h4>Pet Sitter</h4>
+                                <p><?php echo htmlspecialchars($booking_details['sitterName']); ?></p>
+                            </div>
+                            <div class="item-price">Rs. <?php echo number_format($booking_details['hourly_rate'], 2); ?>/hr</div>
+                        </div>
+
+                        <div class="order-item">
+                            <div class="item-info">
+                                <h4>Service Fee</h4>
+                                <p>Platform fee</p>
+                            </div>
+                            <div class="item-price">Rs. <?php echo number_format($total_amount * 0.2, 2); ?></div>
+                        </div>
+
+                    <?php else: ?>
+                        <!-- Cart Items Summary -->
+                        <?php if (empty($order_items)): ?>
+                            <div class="order-item">
+                                <div class="item-info">
+                                    <h4>Sample Pet Food</h4>
+                                    <p>Premium Dog Food (5kg)</p>
+                                </div>
+                                <div class="item-price">Rs. 2,500.00</div>
+                            </div>
+
+                            <div class="order-item">
+                                <div class="item-info">
+                                    <h4>Pet Accessories</h4>
+                                    <p>Collar & Leash Set</p>
+                                </div>
+                                <div class="item-price">Rs. 1,250.00</div>
+                            </div>
+
+                            <div class="order-item">
+                                <div class="item-info">
+                                    <h4>Service Fee</h4>
+                                    <p>Platform fee</p>
+                                </div>
+                                <div class="item-price">Rs. 187.50</div>
+                            </div>
+                        <?php else: ?>
+                            <?php foreach ($order_items as $item): ?>
+                                <div class="order-item">
+                                    <div class="item-info">
+                                        <h4><?php echo htmlspecialchars($item['name']); ?></h4>
+                                        <p><?php echo htmlspecialchars($item['brand']); ?> (Qty: <?php echo $item['quantity']; ?>)</p>
+                                    </div>
+                                    <div class="item-price">Rs. <?php echo number_format($item['subtotal'], 2); ?></div>
+                                </div>
+                            <?php endforeach; ?>
+
+                            <div class="order-item">
+                                <div class="item-info">
+                                    <h4>Service Fee</h4>
+                                    <p>Platform fee</p>
+                                </div>
+                                <div class="item-price">Rs. <?php echo number_format($total_amount * 0.05, 2); ?></div>
+                            </div>
+                        <?php endif; ?>
+                    <?php endif; ?>
+
+                    <div class="order-total">
+                        <h3>Total</h3>
+                        <div class="total-amount">Rs. <?php echo number_format($total_amount, 2); ?></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -666,252 +600,105 @@
             const paymentOptions = document.querySelectorAll('.payment-option');
             const cardDetails = document.querySelectorAll('.card-details');
             const form = document.getElementById('paymentForm');
-            const payButton = document.getElementById('payButton');
-            
-            // Card input elements
-            const cardNumberInput = document.getElementById('card_number');
-            const cardHolderInput = document.getElementById('card_holder');
-            const expiryInput = document.getElementById('expiry_date');
-            const cvvInput = document.getElementById('cvv');
-            
-            // Preview elements
-            const previewNumber = document.getElementById('preview-number');
-            const previewHolder = document.getElementById('preview-holder');
-            const previewExpiry = document.getElementById('preview-expiry');
+            const paymentMethodInput = document.getElementById('payment_method');
 
             // Payment method selection
             paymentOptions.forEach(option => {
                 option.addEventListener('click', function() {
-                    paymentOptions.forEach(opt => opt.classList.remove('selected'));
-                    this.classList.add('selected');
+                    // Remove active class from all options
+                    paymentOptions.forEach(opt => opt.classList.remove('active'));
+                    cardDetails.forEach(details => details.classList.remove('active'));
                     
+                    // Add active class to clicked option
+                    this.classList.add('active');
                     const method = this.dataset.method;
-                    const radio = this.querySelector('input[type="radio"]');
-                    radio.checked = true;
+                    paymentMethodInput.value = method;
                     
-                    cardDetails.forEach(detail => {
-                        detail.classList.remove('active');
-                    });
-                    
-                    document.getElementById(method + '_details').classList.add('active');
+                    // Show appropriate form fields
+                    if (method === 'credit_card' || method === 'debit_card') {
+                        document.getElementById('card_details').classList.add('active');
+                    }
                 });
             });
 
-            // Card number formatting and validation
-            cardNumberInput.addEventListener('input', function(e) {
-                let value = e.target.value.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
-                let formattedValue = value.match(/.{1,4}/g)?.join(' ') || value;
-                
-                if (formattedValue.length > 19) {
-                    formattedValue = formattedValue.substr(0, 19);
-                }
-                
-                e.target.value = formattedValue;
-                
-                // Update preview
-                previewNumber.textContent = formattedValue.padEnd(19, '•').replace(/(.{4})/g, '$1 ');
-                
-                // Card type detection
-                const cardType = document.querySelector('.card-type i');
-                if (value.startsWith('4')) {
-                    cardType.className = 'fab fa-cc-visa';
-                } else if (value.startsWith('5')) {
-                    cardType.className = 'fab fa-cc-mastercard';
-                } else if (value.startsWith('3')) {
-                    cardType.className = 'fab fa-cc-amex';
-                } else {
-                    cardType.className = 'fas fa-credit-card';
-                }
-                
-                // Validation
-                validateCardNumber(value);
-            });
-
-            // Cardholder name
-            cardHolderInput.addEventListener('input', function(e) {
-                const value = e.target.value.toUpperCase();
-                previewHolder.textContent = value || 'CARDHOLDER NAME';
-                validateCardHolder(value);
-            });
+            // Card number formatting
+            const cardNumberInput = document.getElementById('card_number');
+            if (cardNumberInput) {
+                cardNumberInput.addEventListener('input', function(e) {
+                    let value = e.target.value.replace(/\s/g, '').replace(/\D/g, '');
+                    let formattedValue = value.replace(/(.{4})/g, '$1 ').trim();
+                    if (formattedValue.length > 19) {
+                        formattedValue = formattedValue.substr(0, 19);
+                    }
+                    e.target.value = formattedValue;
+                });
+            }
 
             // Expiry date formatting
-            expiryInput.addEventListener('input', function(e) {
-                let value = e.target.value.replace(/\D/g, '');
-                if (value.length >= 2) {
-                    value = value.substring(0, 2) + '/' + value.substring(2, 4);
-                }
-                e.target.value = value;
-                previewExpiry.textContent = value || 'MM/YY';
-                validateExpiry(value);
-            });
-
-            // CVV validation
-            cvvInput.addEventListener('input', function(e) {
-                e.target.value = e.target.value.replace(/\D/g, '');
-                validateCVV(e.target.value);
-            });
-
-            // Validation functions
-            function validateCardNumber(number) {
-                const input = document.getElementById('card_number');
-                const error = document.getElementById('card_number_error');
-                
-                if (number.length === 0) {
-                    showError(input, error, 'Card number is required');
-                    return false;
-                } else if (number.length < 16) {
-                    showError(input, error, 'Card number must be 16 digits');
-                    return false;
-                } else if (!luhnCheck(number)) {
-                    showError(input, error, 'Invalid card number');
-                    return false;
-                } else {
-                    showSuccess(input, error);
-                    return true;
-                }
-            }
-
-            function validateCardHolder(name) {
-                const input = document.getElementById('card_holder');
-                const error = document.getElementById('card_holder_error');
-                
-                if (name.length === 0) {
-                    showError(input, error, 'Cardholder name is required');
-                    return false;
-                } else if (name.length < 2) {
-                    showError(input, error, 'Name must be at least 2 characters');
-                    return false;
-                } else {
-                    showSuccess(input, error);
-                    return true;
-                }
-            }
-
-            function validateExpiry(expiry) {
-                const input = document.getElementById('expiry_date');
-                const error = document.getElementById('expiry_error');
-                
-                if (expiry.length === 0) {
-                    showError(input, error, 'Expiry date is required');
-                    return false;
-                } else if (expiry.length < 5) {
-                    showError(input, error, 'Invalid expiry date format');
-                    return false;
-                } else {
-                    const [month, year] = expiry.split('/');
-                    const now = new Date();
-                    const currentYear = now.getFullYear() % 100;
-                    const currentMonth = now.getMonth() + 1;
-                    
-                    if (parseInt(month) < 1 || parseInt(month) > 12) {
-                        showError(input, error, 'Invalid month');
-                        return false;
+            const expiryInput = document.getElementById('expiry_date');
+            if (expiryInput) {
+                expiryInput.addEventListener('input', function(e) {
+                    let value = e.target.value.replace(/\D/g, '');
+                    if (value.length >= 2) {
+                        value = value.substring(0,2) + '/' + value.substring(2,4);
                     }
-                    
-                    if (parseInt(year) < currentYear || (parseInt(year) === currentYear && parseInt(month) < currentMonth)) {
-                        showError(input, error, 'Card has expired');
-                        return false;
-                    }
-                    
-                    showSuccess(input, error);
-                    return true;
-                }
+                    e.target.value = value;
+                });
             }
 
-            function validateCVV(cvv) {
-                const input = document.getElementById('cvv');
-                const error = document.getElementById('cvv_error');
-                
-                if (cvv.length === 0) {
-                    showError(input, error, 'CVV is required');
-                    return false;
-                } else if (cvv.length < 3) {
-                    showError(input, error, 'CVV must be 3-4 digits');
-                    return false;
-                } else {
-                    showSuccess(input, error);
-                    return true;
-                }
-            }
-
-            function showError(input, errorElement, message) {
-                input.classList.add('error');
-                input.classList.remove('success');
-                errorElement.textContent = message;
-                errorElement.style.display = 'block';
-            }
-
-            function showSuccess(input, errorElement) {
-                input.classList.remove('error');
-                input.classList.add('success');
-                errorElement.style.display = 'none';
-            }
-
-            // Luhn algorithm for card validation
-            function luhnCheck(num) {
-                let sum = 0;
-                let shouldDouble = false;
-                
-                for (let i = num.length - 1; i >= 0; i--) {
-                    let digit = parseInt(num.charAt(i));
-                    
-                    if (shouldDouble) {
-                        digit *= 2;
-                        if (digit > 9) {
-                            digit -= 9;
-                        }
-                    }
-                    
-                    sum += digit;
-                    shouldDouble = !shouldDouble;
-                }
-                
-                return (sum % 10) === 0;
+            // CVV input restriction
+            const cvvInput = document.getElementById('cvv');
+            if (cvvInput) {
+                cvvInput.addEventListener('input', function(e) {
+                    e.target.value = e.target.value.replace(/\D/g, '');
+                });
             }
 
             // Form submission
             form.addEventListener('submit', function(e) {
                 e.preventDefault();
                 
-                const selectedMethod = document.querySelector('input[name="payment_method"]:checked').value;
+                // Basic validation
+                const requiredFields = form.querySelectorAll('[required]');
+                let isValid = true;
                 
-                if (selectedMethod === 'credit_card') {
-                    const cardNumber = cardNumberInput.value.replace(/\s/g, '');
-                    const cardHolder = cardHolderInput.value;
-                    const expiry = expiryInput.value;
-                    const cvv = cvvInput.value;
-                    
-                    if (!validateCardNumber(cardNumber) || !validateCardHolder(cardHolder) || 
-                        !validateExpiry(expiry) || !validateCVV(cvv)) {
-                        return;
+                requiredFields.forEach(field => {
+                    if (!field.value.trim()) {
+                        isValid = false;
+                        field.classList.add('is-invalid');
+                    } else {
+                        field.classList.remove('is-invalid');
                     }
+                });
+                
+                if (isValid) {
+                    // Show loading state
+                    const submitBtn = form.querySelector('.pay-now-btn');
+                    const originalText = submitBtn.innerHTML;
+                    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+                    submitBtn.disabled = true;
+                    
+                    // Simulate processing
+                    setTimeout(() => {
+                        alert('Payment processed successfully!');
+                        // Redirect to success page
+                        window.location.href = 'payment_success.php';
+                    }, 2000);
+                } else {
+                    alert('Please fill in all required fields.');
                 }
-                
-                // Show loading state
-                payButton.classList.add('loading');
-                payButton.disabled = true;
-                
-                // Simulate payment processing
-                setTimeout(() => {
-                    // Update progress bar
-                    const progressBar = document.querySelector('.progress-bar::after');
-                    const activeStep = document.querySelector('.step-circle.active');
-                    const nextStep = document.querySelector('.step-circle.inactive');
-                    
-                    activeStep.classList.remove('active');
-                    activeStep.classList.add('completed');
-                    nextStep.classList.remove('inactive');
-                    nextStep.classList.add('active');
-                    
-                    // Show success message
-                    alert('Payment successful! Your booking has been confirmed.');
-                    
-                    // Reset button
-                    payButton.classList.remove('loading');
-                    payButton.disabled = false;
-                }, 3000);
             });
         });
     </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
+
+<?php
+// Include footer
+include_once 'includes/footer.php';
+
+// Close database connection
+$conn->close();
+?>
