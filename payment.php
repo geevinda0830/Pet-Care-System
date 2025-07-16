@@ -1,5 +1,119 @@
 <?php
-// Start session if not already started
+// AJAX Payment Handler - Must be first, before any output
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_payment'])) {
+    // Start session
+    if (session_status() == PHP_SESSION_NONE) {
+        session_start();
+    }
+    
+    // Set JSON header immediately
+    header('Content-Type: application/json');
+    
+    // Include database connection
+    require_once 'config/db_connect.php';
+    
+    try {
+        // Check login
+        if (!isset($_SESSION['user_id'])) {
+            throw new Exception("You must be logged in to make a payment.");
+        }
+
+        $user_id = $_SESSION['user_id'];
+        $cart_id = intval($_GET['cart_id']);
+
+        // Start transaction
+        $conn->autocommit(FALSE);
+        
+        // Get payment details
+        $payment_method = trim($_POST['payment_method']);
+        $cardholder_name = isset($_POST['cardholder_name']) ? trim($_POST['cardholder_name']) : 'Cash Payment';
+        
+        // Get cart and calculate total
+        $cart_sql = "SELECT c.*, po.fullName FROM cart c 
+                     JOIN pet_owner po ON c.userID = po.userID 
+                     WHERE c.cartID = ? AND c.userID = ?";
+        $cart_stmt = $conn->prepare($cart_sql);
+        $cart_stmt->bind_param("ii", $cart_id, $user_id);
+        $cart_stmt->execute();
+        $cart_result = $cart_stmt->get_result();
+        
+        if ($cart_result->num_rows === 0) {
+            throw new Exception("Cart not found.");
+        }
+        
+        $cart = $cart_result->fetch_assoc();
+        $cart_stmt->close();
+        
+        // Calculate total
+        $total_sql = "SELECT SUM(quantity * price) as total FROM cart_items WHERE cartID = ?";
+        $total_stmt = $conn->prepare($total_sql);
+        $total_stmt->bind_param("i", $cart_id);
+        $total_stmt->execute();
+        $total_result = $total_stmt->get_result();
+        $total_amount = $total_result->fetch_assoc()['total'] ?? 0;
+        $total_stmt->close();
+        
+        if ($total_amount <= 0) {
+            throw new Exception("Cart is empty.");
+        }
+        
+        // Insert payment
+        $payment_status = ($payment_method === 'cash_on_delivery') ? 'pending' : 'completed';
+        $payment_sql = "INSERT INTO payment (cartID, amount, payment_method, payment_status, payment_date, cardholder_name) VALUES (?, ?, ?, ?, NOW(), ?)";
+        $payment_stmt = $conn->prepare($payment_sql);
+        $payment_stmt->bind_param("idsss", $cart_id, $total_amount, $payment_method, $payment_status, $cardholder_name);
+        $payment_stmt->execute();
+        $payment_stmt->close();
+        
+        // Update order status
+        if ($cart['orderID']) {
+            $order_status = ($payment_method === 'cash_on_delivery') ? 'pending' : 'paid';
+            $update_order_sql = "UPDATE `order` SET status = ? WHERE orderID = ?";
+            $update_order_stmt = $conn->prepare($update_order_sql);
+            $update_order_stmt->bind_param("si", $order_status, $cart['orderID']);
+            $update_order_stmt->execute();
+            $update_order_stmt->close();
+        }
+        
+        // Update stock for completed payments
+        if ($payment_status === 'completed') {
+            $stock_sql = "SELECT productID, quantity FROM cart_items WHERE cartID = ?";
+            $stock_stmt = $conn->prepare($stock_sql);
+            $stock_stmt->bind_param("i", $cart_id);
+            $stock_stmt->execute();
+            $stock_result = $stock_stmt->get_result();
+            
+            while ($stock_row = $stock_result->fetch_assoc()) {
+                $update_stock_sql = "UPDATE pet_food_and_accessories SET stock = stock - ? WHERE productID = ?";
+                $update_stock_stmt = $conn->prepare($update_stock_sql);
+                $update_stock_stmt->bind_param("ii", $stock_row['quantity'], $stock_row['productID']);
+                $update_stock_stmt->execute();
+                $update_stock_stmt->close();
+            }
+            $stock_stmt->close();
+        }
+        
+        $conn->commit();
+        $conn->autocommit(TRUE);
+        
+        $message = ($payment_method === 'cash_on_delivery') ? 
+                   "Order placed successfully! You will pay cash on delivery. Order ID: " . $cart['orderID'] :
+                   "Payment completed successfully! Your order has been confirmed. Order ID: " . $cart['orderID'];
+        
+        echo json_encode(['success' => true, 'message' => $message, 'order_id' => $cart['orderID']]);
+        exit();
+        
+    } catch (Exception $e) {
+        if (isset($conn)) {
+            $conn->rollback();
+            $conn->autocommit(TRUE);
+        }
+        echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        exit();
+    }
+}
+
+// Regular page processing starts here
 if (session_status() == PHP_SESSION_NONE) {
     session_start();
 }
@@ -11,84 +125,53 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
-// Include database connection
+// Check if cart_id is provided
+if (!isset($_GET['cart_id']) || empty($_GET['cart_id'])) {
+    $_SESSION['error_message'] = "Invalid payment request.";
+    header("Location: cart.php");
+    exit();
+}
+
+// Include database connection for regular page
 require_once 'config/db_connect.php';
 
-// Get payment type (cart or booking)
-$payment_type = $_GET['type'] ?? 'cart';
-$booking_id = $_GET['booking_id'] ?? null;
+$user_id = $_SESSION['user_id'];
+$cart_id = intval($_GET['cart_id']);
 
-// Get user information
-$user_sql = "SELECT * FROM pet_owner WHERE userID = ?";
-$user_stmt = $conn->prepare($user_sql);
-$user_stmt->bind_param("i", $_SESSION['user_id']);
-$user_stmt->execute();
-$user_result = $user_stmt->get_result();
-$user = $user_result->fetch_assoc();
-$user_stmt->close();
+// Get cart details for display
+$cart_sql = "SELECT c.*, po.fullName, po.email, po.address, po.contact FROM cart c 
+             JOIN pet_owner po ON c.userID = po.userID 
+             WHERE c.cartID = ? AND c.userID = ?";
+$cart_stmt = $conn->prepare($cart_sql);
+$cart_stmt->bind_param("ii", $cart_id, $user_id);
+$cart_stmt->execute();
+$cart_result = $cart_stmt->get_result();
 
-// Initialize variables
+if ($cart_result->num_rows === 0) {
+    $_SESSION['error_message'] = "Cart not found.";
+    header("Location: cart.php");
+    exit();
+}
+
+$cart = $cart_result->fetch_assoc();
+$cart_stmt->close();
+
+// Get cart items
+$items_sql = "SELECT ci.*, p.name, p.brand, p.image FROM cart_items ci 
+              JOIN pet_food_and_accessories p ON ci.productID = p.productID 
+              WHERE ci.cartID = ?";
+$items_stmt = $conn->prepare($items_sql);
+$items_stmt->bind_param("i", $cart_id);
+$items_stmt->execute();
+$items_result = $items_stmt->get_result();
 $order_items = [];
 $total_amount = 0;
-$booking_details = null;
-
-if ($payment_type === 'booking' && $booking_id) {
-    // Get booking details
-    $booking_sql = "SELECT b.*, ps.price as hourly_rate, ps.fullName as sitterName,
-                           p.petName, p.type as petType, p.breed as petBreed
-                    FROM booking b 
-                    JOIN pet_sitter ps ON b.sitterID = ps.userID
-                    JOIN pet_profile p ON b.petID = p.petID
-                    WHERE b.bookingID = ? AND b.userID = ?";
-    $booking_stmt = $conn->prepare($booking_sql);
-    $booking_stmt->bind_param("ii", $booking_id, $_SESSION['user_id']);
-    $booking_stmt->execute();
-    $booking_result = $booking_stmt->get_result();
-    
-    if ($booking_result->num_rows > 0) {
-        $booking_details = $booking_result->fetch_assoc();
-        
-        // Calculate booking cost
-        $check_in = new DateTime($booking_details['checkInDate'] . ' ' . $booking_details['checkInTime']);
-        $check_out = new DateTime($booking_details['checkOutDate'] . ' ' . $booking_details['checkOutTime']);
-        $interval = $check_in->diff($check_out);
-        $total_hours = $interval->days * 24 + $interval->h + ($interval->i / 60);
-        $total_amount = $total_hours * $booking_details['hourly_rate'];
-    }
-    $booking_stmt->close();
-} else {
-    // Get cart items for regular payment
-    $cart_sql = "SELECT c.*, 
-                        (SELECT SUM(ci.quantity * ci.price) FROM cart_items ci WHERE ci.cartID = c.cartID) as calculated_total
-                 FROM cart c 
-                 WHERE c.userID = ? AND c.status = 'active'";
-    $cart_stmt = $conn->prepare($cart_sql);
-    $cart_stmt->bind_param("i", $_SESSION['user_id']);
-    $cart_stmt->execute();
-    $cart_result = $cart_stmt->get_result();
-    
-    if ($cart_result->num_rows > 0) {
-        $cart = $cart_result->fetch_assoc();
-        $total_amount = $cart['calculated_total'] ?? $cart['total_amount'];
-        
-        // Get cart items
-        $items_sql = "SELECT ci.*, p.name, p.brand, p.image, p.category 
-                      FROM cart_items ci 
-                      JOIN pet_food_and_accessories p ON ci.productID = p.productID 
-                      WHERE ci.cartID = ?";
-        $items_stmt = $conn->prepare($items_sql);
-        $items_stmt->bind_param("i", $cart['cartID']);
-        $items_stmt->execute();
-        $items_result = $items_stmt->get_result();
-        
-        while ($row = $items_result->fetch_assoc()) {
-            $row['subtotal'] = $row['quantity'] * $row['price'];
-            $order_items[] = $row;
-        }
-        $items_stmt->close();
-    }
-    $cart_stmt->close();
+while ($row = $items_result->fetch_assoc()) {
+    $row['subtotal'] = $row['quantity'] * $row['price'];
+    $total_amount += $row['subtotal'];
+    $order_items[] = $row;
 }
+$items_stmt->close();
 
 // Include header
 include_once 'includes/header.php';
@@ -127,11 +210,6 @@ include_once 'includes/header.php';
             margin-bottom: 10px;
         }
 
-        .payment-header p {
-            font-size: 1.1rem;
-            opacity: 0.9;
-        }
-
         .payment-content {
             display: grid;
             grid-template-columns: 1fr 400px;
@@ -156,6 +234,21 @@ include_once 'includes/header.php';
             top: 20px;
         }
 
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+            margin-bottom: 25px;
+        }
+
+        .back-link:hover {
+            color: #4f46e5;
+            text-decoration: none;
+        }
+
         .section-title {
             font-size: 1.5rem;
             font-weight: 700;
@@ -166,9 +259,22 @@ include_once 'includes/header.php';
             gap: 10px;
         }
 
+        .customer-info {
+            background: #f8fafc;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 30px;
+        }
+
+        .customer-info h4 {
+            color: #1e293b;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+
         .payment-options {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            grid-template-columns: repeat(2, 1fr);
             gap: 15px;
             margin-bottom: 30px;
         }
@@ -204,14 +310,16 @@ include_once 'includes/header.php';
             font-weight: 600;
             color: #1e293b;
             margin: 0;
+            font-size: 0.9rem;
         }
 
         .card-details {
             display: none;
-            background: #f8fafc;
+            background: #e8f0fe;
             border-radius: 15px;
             padding: 25px;
             margin-top: 20px;
+            border: 1px solid #dadce0;
         }
 
         .card-details.active {
@@ -222,30 +330,51 @@ include_once 'includes/header.php';
             margin-bottom: 20px;
         }
 
-        .form-label {
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
             font-weight: 600;
             color: #374151;
-            margin-bottom: 8px;
-            display: block;
         }
 
-        .form-control {
+        .form-group input {
+            width: 100%;
+            padding: 12px 15px;
             border: 2px solid #e5e7eb;
-            border-radius: 12px;
-            padding: 15px;
-            font-size: 1rem;
-            transition: all 0.3s ease;
+            border-radius: 8px;
+            font-size: 14px;
+            box-sizing: border-box;
         }
 
-        .form-control:focus {
+        .form-group input:focus {
             border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+            outline: none;
         }
 
         .form-row {
-            display: grid;
-            grid-template-columns: 1fr 120px;
+            display: flex;
             gap: 15px;
+        }
+
+        .form-row .form-group {
+            flex: 1;
+        }
+
+        .pay-btn {
+            width: 100%;
+            background: linear-gradient(135deg, #10b981, #047857);
+            color: white;
+            padding: 15px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+
+        .pay-btn:hover {
+            background: linear-gradient(135deg, #047857, #065f46);
         }
 
         .order-summary h3 {
@@ -253,40 +382,15 @@ include_once 'includes/header.php';
             font-weight: 700;
             color: #1e293b;
             margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #f1f5f9;
         }
 
         .order-item {
             display: flex;
             justify-content: space-between;
-            align-items: center;
             padding: 15px 0;
             border-bottom: 1px solid #f1f5f9;
-        }
-
-        .order-item:last-child {
-            border-bottom: none;
-        }
-
-        .item-info h4 {
-            font-size: 1rem;
-            font-weight: 600;
-            color: #1e293b;
-            margin: 0 0 5px 0;
-        }
-
-        .item-info p {
-            font-size: 0.9rem;
-            color: #64748b;
-            margin: 0;
-        }
-
-        .item-price {
-            font-weight: 700;
-            color: #667eea;
-            font-size: 1.1rem;
         }
 
         .order-total {
@@ -298,98 +402,39 @@ include_once 'includes/header.php';
             align-items: center;
         }
 
-        .order-total h3 {
-            font-size: 1.2rem;
-            font-weight: 700;
-            color: #1e293b;
-            margin: 0;
-        }
-
         .total-amount {
             font-size: 1.5rem;
             font-weight: 700;
-            color: #667eea;
-        }
-
-        .billing-info {
-            background: #f8fafc;
-            border-radius: 15px;
-            padding: 25px;
-            margin-bottom: 30px;
-        }
-
-        .billing-info h5 {
-            font-weight: 600;
-            color: #1e293b;
-            margin-bottom: 15px;
-        }
-
-        .billing-item {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 10px;
-        }
-
-        .billing-item:last-child {
-            margin-bottom: 0;
-        }
-
-        .pay-now-btn {
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            border: none;
-            border-radius: 12px;
-            padding: 15px 30px;
-            color: white;
-            font-weight: 700;
-            font-size: 1.1rem;
-            width: 100%;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-        }
-
-        .pay-now-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
-        }
-
-        .security-notice {
-            background: #ecfdf5;
-            border: 1px solid #10b981;
-            border-radius: 12px;
-            padding: 15px;
-            margin-top: 20px;
-            text-align: center;
-        }
-
-        .security-notice i {
             color: #10b981;
-            margin-right: 8px;
         }
 
-        .security-notice small {
-            color: #064e3b;
-            font-weight: 500;
+        .error-message {
+            background: #fef2f2;
+            color: #dc2626;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 1px solid #fecaca;
+        }
+
+        .method-description {
+            display: none;
+            background: #f0f9ff;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            border: 1px solid #bae6fd;
+        }
+
+        .method-description.active {
+            display: block;
         }
 
         @media (max-width: 768px) {
             .payment-content {
                 grid-template-columns: 1fr;
-                gap: 20px;
             }
-
-            .payment-form-section,
-            .order-summary-section {
-                padding: 25px;
-            }
-
-            .form-row {
-                grid-template-columns: 1fr;
-            }
-
+            
             .payment-options {
                 grid-template-columns: 1fr;
             }
@@ -399,30 +444,39 @@ include_once 'includes/header.php';
 
 <body>
     <div class="payment-container">
-        <!-- Payment Header -->
         <div class="payment-header">
-            <h1><i class="fas fa-credit-card me-3"></i>Secure Payment</h1>
-            <p>Complete your <?php echo $payment_type === 'booking' ? 'booking' : 'order'; ?> with our secure payment system</p>
+            <h1><i class="fas fa-credit-card"></i> Secure Payment</h1>
+            <p>Complete your order with our secure payment system</p>
         </div>
 
         <div class="payment-content">
-            <!-- Payment Form -->
             <div class="payment-form-section">
+                <a href="cart.php" class="back-link">
+                    <i class="fas fa-arrow-left"></i> Back to Cart
+                </a>
+                
+                <?php if (isset($error_message)): ?>
+                <div class="error-message">
+                    <i class="fas fa-exclamation-triangle"></i> <?php echo htmlspecialchars($error_message); ?>
+                </div>
+                <?php endif; ?>
+                
+                <div class="customer-info">
+                    <h4><i class="fas fa-user"></i> Customer Information</h4>
+                    <p><strong>Name:</strong> <?php echo htmlspecialchars($cart['fullName']); ?></p>
+                    <p><strong>Email:</strong> <?php echo htmlspecialchars($cart['email']); ?></p>
+                    <p><strong>Address:</strong> <?php echo htmlspecialchars($cart['address'] ?: 'Not provided'); ?></p>
+                    <p><strong>Contact:</strong> <?php echo htmlspecialchars($cart['contact'] ?: 'Not provided'); ?></p>
+                </div>
+                
                 <h2 class="section-title">
-                    <i class="fas fa-lock"></i>
-                    Payment Details
+                    <i class="fas fa-lock"></i> Payment Details
                 </h2>
 
-                <form id="paymentForm" method="POST" action="process_payment.php">
-                    <input type="hidden" name="payment_type" value="<?php echo $payment_type; ?>">
-                    <?php if ($booking_id): ?>
-                        <input type="hidden" name="booking_id" value="<?php echo $booking_id; ?>">
-                    <?php endif; ?>
-                    <input type="hidden" name="total_amount" value="<?php echo $total_amount; ?>">
-
+                <form method="POST" id="paymentForm">
                     <!-- Payment Method Selection -->
                     <div class="form-group">
-                        <label class="form-label">Select Payment Method</label>
+                        <label>Select Payment Method</label>
                         <div class="payment-options">
                             <div class="payment-option active" data-method="credit_card">
                                 <i class="fas fa-credit-card"></i>
@@ -440,6 +494,10 @@ include_once 'includes/header.php';
                                 <i class="fas fa-university"></i>
                                 <h6>Bank Transfer</h6>
                             </div>
+                            <div class="payment-option" data-method="cash_on_delivery">
+                                <i class="fas fa-money-bill-wave"></i>
+                                <h6>Cash on Delivery</h6>
+                            </div>
                         </div>
                         <input type="hidden" name="payment_method" id="payment_method" value="credit_card">
                     </div>
@@ -447,251 +505,223 @@ include_once 'includes/header.php';
                     <!-- Card Details -->
                     <div class="card-details active" id="card_details">
                         <div class="form-group">
-                            <label for="card_name" class="form-label">Cardholder Name</label>
-                            <input type="text" class="form-control" id="card_name" name="card_name" 
-                                   placeholder="John Doe" required>
+                            <label for="cardholder_name">Cardholder Name</label>
+                            <input type="text" id="cardholder_name" name="cardholder_name" placeholder="Enter cardholder name" required>
                         </div>
 
                         <div class="form-group">
-                            <label for="card_number" class="form-label">Card Number</label>
-                            <input type="text" class="form-control" id="card_number" name="card_number" 
-                                   placeholder="1234 5678 9012 3456" maxlength="19" required>
+                            <label for="card_number">Card Number</label>
+                            <input type="text" id="card_number" name="card_number" placeholder="XXXX XXXX XXXX XXXX" maxlength="19" required>
                         </div>
 
                         <div class="form-row">
                             <div class="form-group">
-                                <label for="expiry_date" class="form-label">Expiry Date</label>
-                                <input type="text" class="form-control" id="expiry_date" name="expiry_date" 
-                                       placeholder="MM/YY" maxlength="5" required>
+                                <label for="expire_date">Expire Date</label>
+                                <input type="text" id="expire_date" name="expire_date" placeholder="MM/YY" maxlength="5" required>
                             </div>
                             <div class="form-group">
-                                <label for="cvv" class="form-label">CVV</label>
-                                <input type="text" class="form-control" id="cvv" name="cvv" 
-                                       placeholder="123" maxlength="4" required>
+                                <label for="cvc">CVC</label>
+                                <input type="text" id="cvc" name="cvc" placeholder="123" maxlength="4" required>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Billing Information -->
-                    <div class="billing-info">
-                        <h5><i class="fas fa-map-marker-alt me-2"></i>Billing Address</h5>
-                        <div class="form-group">
-                            <label for="billing_address" class="form-label">Address</label>
-                            <input type="text" class="form-control" id="billing_address" name="billing_address" 
-                                   value="<?php echo htmlspecialchars($user['address'] ?? ''); ?>" required>
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="billing_city" class="form-label">City</label>
-                                <input type="text" class="form-control" id="billing_city" name="billing_city" 
-                                       placeholder="Colombo" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="billing_postal" class="form-label">Postal Code</label>
-                                <input type="text" class="form-control" id="billing_postal" name="billing_postal" 
-                                       placeholder="00100" required>
-                            </div>
-                        </div>
+                    <!-- Method Descriptions -->
+                    <div class="method-description" id="paypal_desc">
+                        <h6><i class="fab fa-paypal"></i> PayPal Payment</h6>
+                        <p>You will be redirected to PayPal to complete your payment securely.</p>
                     </div>
 
-                    <!-- Pay Now Button -->
-                    <button type="submit" class="pay-now-btn">
-                        <i class="fas fa-lock"></i>
-                        Pay Now - Rs. <?php echo number_format($total_amount, 2); ?>
+                    <div class="method-description" id="bank_desc">
+                        <h6><i class="fas fa-university"></i> Bank Transfer</h6>
+                        <p>Bank details will be provided after order confirmation. Payment must be completed within 24 hours.</p>
+                    </div>
+
+                    <div class="method-description" id="cod_desc">
+                        <h6><i class="fas fa-money-bill-wave"></i> Cash on Delivery</h6>
+                        <p>Pay with cash when your order is delivered to your doorstep. No advance payment required.</p>
+                    </div>
+
+                    <button type="submit" name="pay_now" class="pay-btn">
+                        <i class="fas fa-lock"></i> Complete Payment - Rs.<?php echo number_format($total_amount, 2); ?>
                     </button>
-
-                    <div class="security-notice">
-                        <i class="fas fa-shield-alt"></i>
-                        <small>Your payment information is encrypted and secure</small>
-                    </div>
                 </form>
             </div>
-
-            <!-- Order Summary -->
+            
             <div class="order-summary-section">
-                <div class="order-summary">
-                    <h3><i class="fas fa-receipt"></i> Order Summary</h3>
-                    
-                    <?php if ($payment_type === 'booking' && $booking_details): ?>
-                        <!-- Booking Summary -->
-                        <div class="order-item">
-                            <div class="item-info">
-                                <h4>Pet Sitting Service</h4>
-                                <p><?php echo htmlspecialchars($booking_details['petType'] . ' - ' . $booking_details['petName']); ?></p>
-                                <p><?php echo date('M d-d, Y', strtotime($booking_details['checkInDate'])); ?></p>
-                            </div>
-                            <div class="item-price">Rs. <?php echo number_format($total_amount * 0.8, 2); ?></div>
-                        </div>
-
-                        <div class="order-item">
-                            <div class="item-info">
-                                <h4>Pet Sitter</h4>
-                                <p><?php echo htmlspecialchars($booking_details['sitterName']); ?></p>
-                            </div>
-                            <div class="item-price">Rs. <?php echo number_format($booking_details['hourly_rate'], 2); ?>/hr</div>
-                        </div>
-
-                        <div class="order-item">
-                            <div class="item-info">
-                                <h4>Service Fee</h4>
-                                <p>Platform fee</p>
-                            </div>
-                            <div class="item-price">Rs. <?php echo number_format($total_amount * 0.2, 2); ?></div>
-                        </div>
-
-                    <?php else: ?>
-                        <!-- Cart Items Summary -->
-                        <?php if (empty($order_items)): ?>
-                            <div class="order-item">
-                                <div class="item-info">
-                                    <h4>Sample Pet Food</h4>
-                                    <p>Premium Dog Food (5kg)</p>
-                                </div>
-                                <div class="item-price">Rs. 2,500.00</div>
-                            </div>
-
-                            <div class="order-item">
-                                <div class="item-info">
-                                    <h4>Pet Accessories</h4>
-                                    <p>Collar & Leash Set</p>
-                                </div>
-                                <div class="item-price">Rs. 1,250.00</div>
-                            </div>
-
-                            <div class="order-item">
-                                <div class="item-info">
-                                    <h4>Service Fee</h4>
-                                    <p>Platform fee</p>
-                                </div>
-                                <div class="item-price">Rs. 187.50</div>
-                            </div>
-                        <?php else: ?>
-                            <?php foreach ($order_items as $item): ?>
-                                <div class="order-item">
-                                    <div class="item-info">
-                                        <h4><?php echo htmlspecialchars($item['name']); ?></h4>
-                                        <p><?php echo htmlspecialchars($item['brand']); ?> (Qty: <?php echo $item['quantity']; ?>)</p>
-                                    </div>
-                                    <div class="item-price">Rs. <?php echo number_format($item['subtotal'], 2); ?></div>
-                                </div>
-                            <?php endforeach; ?>
-
-                            <div class="order-item">
-                                <div class="item-info">
-                                    <h4>Service Fee</h4>
-                                    <p>Platform fee</p>
-                                </div>
-                                <div class="item-price">Rs. <?php echo number_format($total_amount * 0.05, 2); ?></div>
-                            </div>
-                        <?php endif; ?>
-                    <?php endif; ?>
-
-                    <div class="order-total">
-                        <h3>Total</h3>
-                        <div class="total-amount">Rs. <?php echo number_format($total_amount, 2); ?></div>
+                <h3><i class="fas fa-receipt"></i> Order Summary</h3>
+                
+                <?php foreach ($order_items as $item): ?>
+                <div class="order-item">
+                    <div>
+                        <strong><?php echo htmlspecialchars($item['name']); ?></strong><br>
+                        <small><?php echo htmlspecialchars($item['brand']); ?> • Qty: <?php echo $item['quantity']; ?></small>
                     </div>
+                    <div>Rs.<?php echo number_format($item['subtotal'], 2); ?></div>
+                </div>
+                <?php endforeach; ?>
+                
+                <div class="order-item">
+                    <strong>Shipping</strong>
+                    <span style="color: #10b981; font-weight: bold;">FREE</span>
+                </div>
+                
+                <div class="order-total">
+                    <h4>Total:</h4>
+                    <div class="total-amount">Rs.<?php echo number_format($total_amount, 2); ?></div>
                 </div>
             </div>
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const paymentOptions = document.querySelectorAll('.payment-option');
-            const cardDetails = document.querySelectorAll('.card-details');
-            const form = document.getElementById('paymentForm');
+            const cardDetails = document.getElementById('card_details');
+            const methodDescriptions = document.querySelectorAll('.method-description');
             const paymentMethodInput = document.getElementById('payment_method');
+            const form = document.getElementById('paymentForm');
 
             // Payment method selection
             paymentOptions.forEach(option => {
                 option.addEventListener('click', function() {
-                    // Remove active class from all options
                     paymentOptions.forEach(opt => opt.classList.remove('active'));
-                    cardDetails.forEach(details => details.classList.remove('active'));
+                    methodDescriptions.forEach(desc => desc.classList.remove('active'));
                     
-                    // Add active class to clicked option
                     this.classList.add('active');
                     const method = this.dataset.method;
                     paymentMethodInput.value = method;
                     
-                    // Show appropriate form fields
+                    // Show/hide card details
                     if (method === 'credit_card' || method === 'debit_card') {
-                        document.getElementById('card_details').classList.add('active');
+                        cardDetails.classList.add('active');
+                        cardDetails.querySelectorAll('input').forEach(input => {
+                            input.setAttribute('required', 'required');
+                        });
+                    } else {
+                        cardDetails.classList.remove('active');
+                        cardDetails.querySelectorAll('input').forEach(input => {
+                            input.removeAttribute('required');
+                        });
                     }
+                    
+                    // Show method description
+                    if (method === 'paypal') document.getElementById('paypal_desc').classList.add('active');
+                    if (method === 'bank_transfer') document.getElementById('bank_desc').classList.add('active');
+                    if (method === 'cash_on_delivery') document.getElementById('cod_desc').classList.add('active');
                 });
             });
 
-            // Card number formatting
+            // Card formatting
             const cardNumberInput = document.getElementById('card_number');
             if (cardNumberInput) {
                 cardNumberInput.addEventListener('input', function(e) {
-                    let value = e.target.value.replace(/\s/g, '').replace(/\D/g, '');
-                    let formattedValue = value.replace(/(.{4})/g, '$1 ').trim();
-                    if (formattedValue.length > 19) {
-                        formattedValue = formattedValue.substr(0, 19);
+                    let value = e.target.value.replace(/\D/g, '');
+                    let formattedValue = value.replace(/(\d{4})(?=\d)/g, '$1 ');
+                    if (formattedValue.length <= 19) {
+                        e.target.value = formattedValue;
                     }
-                    e.target.value = formattedValue;
                 });
             }
 
-            // Expiry date formatting
-            const expiryInput = document.getElementById('expiry_date');
-            if (expiryInput) {
-                expiryInput.addEventListener('input', function(e) {
+            const expireDateInput = document.getElementById('expire_date');
+            if (expireDateInput) {
+                expireDateInput.addEventListener('input', function(e) {
                     let value = e.target.value.replace(/\D/g, '');
                     if (value.length >= 2) {
-                        value = value.substring(0,2) + '/' + value.substring(2,4);
+                        value = value.substring(0, 2) + '/' + value.substring(2, 4);
                     }
                     e.target.value = value;
                 });
             }
 
-            // CVV input restriction
-            const cvvInput = document.getElementById('cvv');
-            if (cvvInput) {
-                cvvInput.addEventListener('input', function(e) {
+            const cvcInput = document.getElementById('cvc');
+            if (cvcInput) {
+                cvcInput.addEventListener('input', function(e) {
                     e.target.value = e.target.value.replace(/\D/g, '');
                 });
             }
 
-            // Form submission
+            // Form submission with AJAX
             form.addEventListener('submit', function(e) {
-                e.preventDefault();
+                e.preventDefault(); // Prevent default form submission
                 
-                // Basic validation
-                const requiredFields = form.querySelectorAll('[required]');
-                let isValid = true;
+                const method = paymentMethodInput.value;
                 
-                requiredFields.forEach(field => {
-                    if (!field.value.trim()) {
-                        isValid = false;
-                        field.classList.add('is-invalid');
-                    } else {
-                        field.classList.remove('is-invalid');
+                if (method === 'credit_card' || method === 'debit_card') {
+                    const cardName = document.getElementById('cardholder_name').value.trim();
+                    const cardNumber = document.getElementById('card_number').value.replace(/\s/g, '');
+                    const expireDate = document.getElementById('expire_date').value;
+                    const cvc = document.getElementById('cvc').value;
+
+                    if (!cardName || cardNumber.length < 13 || !/^\d{2}\/\d{2}$/.test(expireDate) || cvc.length < 3) {
+                        alert('Please fill in all card details correctly.');
+                        return;
                     }
-                });
-                
-                if (isValid) {
-                    // Show loading state
-                    const submitBtn = form.querySelector('.pay-now-btn');
-                    const originalText = submitBtn.innerHTML;
-                    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
-                    submitBtn.disabled = true;
-                    
-                    // Simulate processing
-                    setTimeout(() => {
-                        alert('Payment processed successfully!');
-                        // Redirect to success page
-                        window.location.href = 'payment_success.php';
-                    }, 2000);
-                } else {
-                    alert('Please fill in all required fields.');
                 }
+
+                // Confirm payment
+                let confirmMessage = '';
+                if (method === 'cash_on_delivery') {
+                    confirmMessage = 'Confirm order with Cash on Delivery payment?';
+                } else {
+                    confirmMessage = `Confirm payment of Rs.<?php echo number_format($total_amount, 2); ?>?`;
+                }
+                
+                if (!confirm(confirmMessage)) {
+                    return;
+                }
+
+                // Show loading
+                const btn = this.querySelector('.pay-btn');
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing Payment...';
+                btn.disabled = true;
+
+                // Submit form with AJAX
+                const formData = new FormData(this);
+                formData.append('ajax_payment', '1');
+
+                fetch(window.location.href, {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: formData
+                })
+                .then(response => {
+                    console.log('Response status:', response.status);
+                    return response.text(); // Get as text first to see what we're getting
+                })
+                .then(text => {
+                    console.log('Response text:', text);
+                    try {
+                        const data = JSON.parse(text);
+                        if (data.success) {
+                            alert('✅ ' + data.message);
+                            window.location.href = 'user/orders.php';
+                        } else {
+                            alert('❌ Payment failed: ' + data.message);
+                            btn.innerHTML = '<i class="fas fa-lock"></i> Complete Payment - Rs.<?php echo number_format($total_amount, 2); ?>';
+                            btn.disabled = false;
+                        }
+                    } catch (parseError) {
+                        console.error('JSON parse error:', parseError);
+                        console.error('Response was:', text);
+                        alert('❌ Payment failed: Server returned invalid response. Check console for details.');
+                        btn.innerHTML = '<i class="fas fa-lock"></i> Complete Payment - Rs.<?php echo number_format($total_amount, 2); ?>';
+                        btn.disabled = false;
+                    }
+                })
+                .catch(error => {
+                    console.error('Fetch error:', error);
+                    alert('❌ Payment failed: Network error. Please check your connection.');
+                    btn.innerHTML = '<i class="fas fa-lock"></i> Complete Payment - Rs.<?php echo number_format($total_amount, 2); ?>';
+                    btn.disabled = false;
+                });
             });
         });
     </script>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
 

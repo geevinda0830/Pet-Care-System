@@ -28,7 +28,7 @@ if (isset($_POST['action'])) {
         }
         
         // Update cart item quantity
-        $update_sql = "UPDATE cart_items SET quantity = ? WHERE id = ? AND cartID IN (SELECT cartID FROM cart WHERE userID = ? AND orderID IS NULL)";
+        $update_sql = "UPDATE cart_items SET quantity = ? WHERE id = ? AND cartID IN (SELECT cartID FROM cart WHERE userID = ? AND (orderID IS NULL OR orderID = 0))";
         $update_stmt = $conn->prepare($update_sql);
         $update_stmt->bind_param("iii", $quantity, $cart_item_id, $_SESSION['user_id']);
         $update_stmt->execute();
@@ -45,7 +45,7 @@ if (isset($_POST['action'])) {
         $cart_item_id = $_POST['cart_item_id'];
         
         // Delete cart item
-        $delete_sql = "DELETE FROM cart_items WHERE id = ? AND cartID IN (SELECT cartID FROM cart WHERE userID = ? AND orderID IS NULL)";
+        $delete_sql = "DELETE FROM cart_items WHERE id = ? AND cartID IN (SELECT cartID FROM cart WHERE userID = ? AND (orderID IS NULL OR orderID = 0))";
         $delete_stmt = $conn->prepare($delete_sql);
         $delete_stmt->bind_param("ii", $cart_item_id, $_SESSION['user_id']);
         $delete_stmt->execute();
@@ -59,7 +59,7 @@ if (isset($_POST['action'])) {
         exit();
     } elseif ($action === 'clear') {
         // Clear entire cart
-        $clear_sql = "DELETE FROM cart_items WHERE cartID IN (SELECT cartID FROM cart WHERE userID = ? AND orderID IS NULL)";
+        $clear_sql = "DELETE FROM cart_items WHERE cartID IN (SELECT cartID FROM cart WHERE userID = ? AND (orderID IS NULL OR orderID = 0))";
         $clear_stmt = $conn->prepare($clear_sql);
         $clear_stmt->bind_param("i", $_SESSION['user_id']);
         $clear_stmt->execute();
@@ -71,13 +71,91 @@ if (isset($_POST['action'])) {
         // Redirect to refresh page
         header("Location: cart.php");
         exit();
+    } elseif ($action === 'checkout') {
+        // NEW CHECKOUT FUNCTIONALITY
+        try {
+            // Start transaction
+            $conn->autocommit(FALSE);
+            
+            // Get user's active cart
+            $cart_sql = "SELECT cartID FROM cart WHERE userID = ? AND (orderID IS NULL OR orderID = 0) LIMIT 1";
+            $cart_stmt = $conn->prepare($cart_sql);
+            $cart_stmt->bind_param("i", $_SESSION['user_id']);
+            $cart_stmt->execute();
+            $cart_result = $cart_stmt->get_result();
+            
+            if ($cart_result->num_rows === 0) {
+                throw new Exception("Cart is empty");
+            }
+            
+            $cart = $cart_result->fetch_assoc();
+            $cart_id = $cart['cartID'];
+            $cart_stmt->close();
+            
+            // Check if cart has items and calculate total
+            $items_check_sql = "SELECT COUNT(*) as item_count, SUM(quantity * price) as total_amount FROM cart_items WHERE cartID = ?";
+            $items_check_stmt = $conn->prepare($items_check_sql);
+            $items_check_stmt->bind_param("i", $cart_id);
+            $items_check_stmt->execute();
+            $items_check_result = $items_check_stmt->get_result();
+            $cart_summary = $items_check_result->fetch_assoc();
+            $items_check_stmt->close();
+            
+            if ($cart_summary['item_count'] == 0) {
+                throw new Exception("Cart is empty");
+            }
+            
+            $total_amount = $cart_summary['total_amount'];
+            
+            // Get user address and contact for order
+            $user_sql = "SELECT address, contact FROM pet_owner WHERE userID = ?";
+            $user_stmt = $conn->prepare($user_sql);
+            $user_stmt->bind_param("i", $_SESSION['user_id']);
+            $user_stmt->execute();
+            $user_result = $user_stmt->get_result();
+            $user_data = $user_result->fetch_assoc();
+            $user_address = $user_data['address'] ?? 'Not provided';
+            $user_contact = $user_data['contact'] ?? 'Not provided';
+            $user_stmt->close();
+            
+            // Create new order
+            $order_sql = "INSERT INTO `order` (userID, status, date, time, address, contact) VALUES (?, 'pending', CURDATE(), CURTIME(), ?, ?)";
+            $order_stmt = $conn->prepare($order_sql);
+            $order_stmt->bind_param("iss", $_SESSION['user_id'], $user_address, $user_contact);
+            $order_stmt->execute();
+            $order_id = $order_stmt->insert_id;
+            $order_stmt->close();
+            
+            // Link cart to order
+            $link_sql = "UPDATE cart SET orderID = ? WHERE cartID = ?";
+            $link_stmt = $conn->prepare($link_sql);
+            $link_stmt->bind_param("ii", $order_id, $cart_id);
+            $link_stmt->execute();
+            $link_stmt->close();
+            
+            // Commit transaction
+            $conn->commit();
+            $conn->autocommit(TRUE);
+            
+            // Redirect to payment page with cart ID
+            header("Location: payment.php?cart_id=" . $cart_id);
+            exit();
+            
+        } catch (Exception $e) {
+            // Rollback transaction
+            $conn->rollback();
+            $conn->autocommit(TRUE);
+            $_SESSION['error_message'] = "Checkout failed: " . $e->getMessage();
+            header("Location: cart.php");
+            exit();
+        }
     }
 }
 
 // Function to update cart total
 function updateCartTotal($conn, $user_id) {
     // Get cart ID
-    $cart_sql = "SELECT cartID FROM cart WHERE userID = ? AND orderID IS NULL";
+    $cart_sql = "SELECT cartID FROM cart WHERE userID = ? AND (orderID IS NULL OR orderID = 0)";
     $cart_stmt = $conn->prepare($cart_sql);
     $cart_stmt->bind_param("i", $user_id);
     $cart_stmt->execute();
@@ -96,13 +174,6 @@ function updateCartTotal($conn, $user_id) {
         $total_row = $total_result->fetch_assoc();
         $total_amount = $total_row['total'] ? $total_row['total'] : 0;
         
-        // Update cart total
-        $update_sql = "UPDATE cart SET total_amount = ? WHERE cartID = ?";
-        $update_stmt = $conn->prepare($update_sql);
-        $update_stmt->bind_param("di", $total_amount, $cart_id);
-        $update_stmt->execute();
-        
-        $update_stmt->close();
         $total_stmt->close();
     }
     
@@ -112,7 +183,7 @@ function updateCartTotal($conn, $user_id) {
 // Get cart items
 function getCartItems($conn, $user_id) {
     // Check if user has an active cart
-    $cart_sql = "SELECT cartID FROM cart WHERE userID = ? AND orderID IS NULL";
+    $cart_sql = "SELECT cartID FROM cart WHERE userID = ? AND (orderID IS NULL OR orderID = 0)";
     $cart_stmt = $conn->prepare($cart_sql);
     $cart_stmt->bind_param("i", $user_id);
     $cart_stmt->execute();
@@ -120,7 +191,7 @@ function getCartItems($conn, $user_id) {
     
     if ($cart_result->num_rows === 0) {
         // Create new cart
-        $new_cart_sql = "INSERT INTO cart (userID, total_amount) VALUES (?, 0)";
+        $new_cart_sql = "INSERT INTO cart (userID) VALUES (?)";
         $new_cart_stmt = $conn->prepare($new_cart_sql);
         $new_cart_stmt->bind_param("i", $user_id);
         $new_cart_stmt->execute();
@@ -144,22 +215,14 @@ function getCartItems($conn, $user_id) {
     $items_result = $items_stmt->get_result();
     
     $cart_items = [];
+    $total_amount = 0;
     while ($row = $items_result->fetch_assoc()) {
+        $row['subtotal'] = $row['quantity'] * $row['price'];
+        $total_amount += $row['subtotal'];
         $cart_items[] = $row;
     }
     
     $items_stmt->close();
-    
-    // Get cart total
-    $total_sql = "SELECT total_amount FROM cart WHERE cartID = ?";
-    $total_stmt = $conn->prepare($total_sql);
-    $total_stmt->bind_param("i", $cart_id);
-    $total_stmt->execute();
-    $total_result = $total_stmt->get_result();
-    $total_row = $total_result->fetch_assoc();
-    $total_amount = $total_row['total_amount'];
-    
-    $total_stmt->close();
     
     return [
         'cart_id' => $cart_id,
@@ -174,292 +237,12 @@ $cart_data = getCartItems($conn, $_SESSION['user_id']);
 include_once 'includes/header.php';
 ?>
 
-<!-- Modern Page Header -->
-<section class="page-header-modern">
-    <div class="container">
-        <div class="row align-items-center">
-            <div class="col-lg-6">
-                <div class="page-header-content">
-                    <span class="page-badge">🛒 Shopping Cart</span>
-                    <h1 class="page-title">Your Shopping <span class="text-gradient">Cart</span></h1>
-                    <p class="page-subtitle">Review your selected items before checkout</p>
-                </div>
-            </div>
-            <div class="col-lg-6">
-                <div class="page-actions">
-                    <a href="shop.php" class="btn btn-outline-light">
-                        <i class="fas fa-store me-2"></i> Continue Shopping
-                    </a>
-                </div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- Cart Content -->
-<section class="cart-section-modern">
-    <div class="container">
-        <?php if (empty($cart_data['items'])): ?>
-            <!-- Empty Cart State -->
-            <div class="empty-cart-modern">
-                <div class="empty-cart-icon">
-                    <i class="fas fa-shopping-cart"></i>
-                </div>
-                <h4>Your cart is empty!</h4>
-                <p>Looks like you haven't added any items to your cart yet. Browse our collection of premium pet products.</p>
-                
-                <div class="empty-cart-actions">
-                    <a href="shop.php" class="btn btn-primary-gradient btn-lg">
-                        <i class="fas fa-store me-2"></i> Start Shopping
-                    </a>
-                </div>
-                
-                <div class="suggested-categories">
-                    <h6>Popular Categories</h6>
-                    <div class="category-links">
-                        <a href="shop.php?category=Dog Food" class="category-link">
-                            <i class="fas fa-bone"></i>
-                            Dog Food
-                        </a>
-                        <a href="shop.php?category=Cat Food" class="category-link">
-                            <i class="fas fa-fish"></i>
-                            Cat Food
-                        </a>
-                        <a href="shop.php?category=Toys" class="category-link">
-                            <i class="fas fa-baseball-ball"></i>
-                            Toys
-                        </a>
-                        <a href="shop.php?category=Accessories" class="category-link">
-                            <i class="fas fa-collar"></i>
-                            Accessories
-                        </a>
-                    </div>
-                </div>
-            </div>
-        <?php else: ?>
-            <!-- Cart Items -->
-            <div class="row g-4">
-                <div class="col-lg-8">
-                    <div class="cart-items-card">
-                        <div class="cart-header">
-                            <h5><i class="fas fa-shopping-bag me-2"></i> Cart Items</h5>
-                            <div class="cart-actions-header">
-                                <span class="item-count"><?php echo count($cart_data['items']); ?> items</span>
-                                <form action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>" method="post" class="clear-cart-form">
-                                    <input type="hidden" name="action" value="clear">
-                                    <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('Are you sure you want to clear your cart?')">
-                                        <i class="fas fa-trash-alt me-1"></i> Clear Cart
-                                    </button>
-                                </form>
-                            </div>
-                        </div>
-                        
-                        <div class="cart-items-list">
-                            <?php foreach ($cart_data['items'] as $item): ?>
-                                <div class="cart-item-modern">
-                                    <div class="item-image">
-                                        <?php if (!empty($item['image'])): ?>
-                                            <img src="assets/images/products/<?php echo htmlspecialchars($item['image']); ?>" alt="<?php echo htmlspecialchars($item['name']); ?>">
-                                        <?php else: ?>
-                                            <div class="image-placeholder">
-                                                <i class="fas fa-image"></i>
-                                            </div>
-                                        <?php endif; ?>
-                                    </div>
-                                    
-                                    <div class="item-details">
-                                        <h6 class="item-name"><?php echo htmlspecialchars($item['name']); ?></h6>
-                                        <p class="item-brand"><?php echo htmlspecialchars($item['brand']); ?></p>
-                                        <div class="item-price">Rs. <?php echo number_format($item['price'], 2); ?></div>
-                                        
-                                        <div class="stock-info">
-                                            <?php if ($item['stock'] <= 5): ?>
-                                                <span class="stock-warning">⚠️ Only <?php echo $item['stock']; ?> left in stock</span>
-                                            <?php else: ?>
-                                                <span class="stock-available">✅ In Stock</span>
-                                            <?php endif; ?>
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="item-quantity">
-                                        <form action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>" method="post" class="quantity-form">
-                                            <input type="hidden" name="action" value="update">
-                                            <input type="hidden" name="cart_item_id" value="<?php echo $item['id']; ?>">
-                                            <div class="quantity-controls">
-                                                <button type="button" class="quantity-btn decrease" onclick="changeQuantity(this, -1)">
-                                                    <i class="fas fa-minus"></i>
-                                                </button>
-                                                <input type="number" name="quantity" class="quantity-input" 
-                                                       value="<?php echo $item['quantity']; ?>" 
-                                                       min="1" max="<?php echo $item['stock']; ?>"
-                                                       onchange="this.form.submit()">
-                                                <button type="button" class="quantity-btn increase" onclick="changeQuantity(this, 1)">
-                                                    <i class="fas fa-plus"></i>
-                                                </button>
-                                            </div>
-                                        </form>
-                                    </div>
-                                    
-                                    <div class="item-total">
-                                        <div class="total-price">Rs. <?php echo number_format($item['price'] * $item['quantity'], 2); ?></div>
-                                    </div>
-                                    
-                                    <div class="item-remove">
-                                        <form action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>" method="post">
-                                            <input type="hidden" name="action" value="remove">
-                                            <input type="hidden" name="cart_item_id" value="<?php echo $item['id']; ?>">
-                                            <button type="submit" class="remove-btn" onclick="return confirm('Remove this item from your cart?')">
-                                                <i class="fas fa-times"></i>
-                                            </button>
-                                        </form>
-                                    </div>
-                                </div>
-                            <?php endforeach; ?>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Cart Summary -->
-                <div class="col-lg-4">
-                    <div class="cart-summary-modern">
-                        <div class="summary-header">
-                            <h5><i class="fas fa-receipt me-2"></i> Order Summary</h5>
-                        </div>
-                        
-                        <div class="summary-details">
-                            <div class="summary-line">
-                                <span>Subtotal (<?php echo count($cart_data['items']); ?> items)</span>
-                                <span>Rs. <?php echo number_format($cart_data['total'], 2); ?></span>
-                            </div>
-                            
-                            <div class="summary-line">
-                                <span>Shipping</span>
-                                <span class="free-shipping">Free</span>
-                            </div>
-                            
-                            <div class="summary-line">
-                                <span>Tax</span>
-                                <span>Rs. 0.00</span>
-                            </div>
-                            
-                            <hr class="summary-divider">
-                            
-                            <div class="summary-total">
-                                <span>Total</span>
-                                <span>Rs. <?php echo number_format($cart_data['total'], 2); ?></span>
-                            </div>
-                        </div>
-                        
-                        <!-- Promo Code -->
-                        <div class="promo-section">
-                            <div class="promo-header">
-                                <h6>🎁 Have a promo code?</h6>
-                            </div>
-                            <form class="promo-form">
-                                <div class="input-group">
-                                    <input type="text" class="form-control promo-input" placeholder="Enter promo code" id="promo_code">
-                                    <button class="btn btn-outline-primary" type="button" onclick="applyPromo()">Apply</button>
-                                </div>
-                            </form>
-                        </div>
-                        
-                        <!-- Checkout Button -->
-                        <div class="checkout-section">
-                            <a href="payment.php?type=cart" class="btn btn-primary-gradient btn-lg w-100 checkout-btn">
-                                <i class="fas fa-lock me-2"></i> Secure Checkout
-                            </a>
-                            <p class="checkout-note">
-                                <i class="fas fa-shield-alt me-1"></i>
-                                Your payment information is secure and encrypted
-                            </p>
-                        </div>
-                        
-                        <!-- Payment Methods -->
-                        <div class="payment-methods">
-                            <h6>We Accept</h6>
-                            <div class="payment-icons">
-                                <i class="fab fa-cc-visa"></i>
-                                <i class="fab fa-cc-mastercard"></i>
-                                <i class="fab fa-paypal"></i>
-                                <i class="fas fa-university"></i>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        <?php endif; ?>
-    </div>
-</section>
-
-<!-- Recommended Products -->
-<section class="recommendations-section">
-    <div class="container">
-        <div class="section-header">
-            <h3>You Might Also Like</h3>
-            <p>Popular products from our collection</p>
-        </div>
-        
-        <div class="recommendations-grid">
-            <div class="product-card-mini">
-                <div class="product-image">
-                    <img src="https://images.unsplash.com/photo-1589924691995-400dc9ecc119?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&q=80" alt="Premium Dog Food">
-                </div>
-                <div class="product-info">
-                    <h6>Premium Dog Food</h6>
-                    <p class="price">Rs. 2,999</p>
-                    <button class="btn btn-primary-gradient btn-sm" onclick="addToCart(1)">
-                        <i class="fas fa-cart-plus me-1"></i> Add
-                    </button>
-                </div>
-            </div>
-            
-            <div class="product-card-mini">
-                <div class="product-image">
-                    <img src="https://images.unsplash.com/photo-1541781408260-3c61143b63d5?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&q=80" alt="Cat Toy">
-                </div>
-                <div class="product-info">
-                    <h6>Interactive Cat Toy</h6>
-                    <p class="price">Rs. 1,299</p>
-                    <button class="btn btn-primary-gradient btn-sm" onclick="addToCart(2)">
-                        <i class="fas fa-cart-plus me-1"></i> Add
-                    </button>
-                </div>
-            </div>
-            
-            <div class="product-card-mini">
-                <div class="product-image">
-                    <img src="https://images.unsplash.com/photo-1583337687581-3f6ba0a9c709?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&q=80" alt="Pet Collar">
-                </div>
-                <div class="product-info">
-                    <h6>Stylish Pet Collar</h6>
-                    <p class="price">Rs. 899</p>
-                    <button class="btn btn-primary-gradient btn-sm" onclick="addToCart(3)">
-                        <i class="fas fa-cart-plus me-1"></i> Add
-                    </button>
-                </div>
-            </div>
-            
-            <div class="product-card-mini">
-                <div class="product-image">
-                    <img src="https://images.unsplash.com/photo-1548199973-03cce0bbc87b?ixlib=rb-4.0.3&auto=format&fit=crop&w=300&q=80" alt="Grooming Kit">
-                </div>
-                <div class="product-info">
-                    <h6>Pet Grooming Kit</h6>
-                    <p class="price">Rs. 2,499</p>
-                    <button class="btn btn-primary-gradient btn-sm" onclick="addToCart(4)">
-                        <i class="fas fa-cart-plus me-1"></i> Add
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-</section>
-
 <style>
+/* Page Header Modern */
 .page-header-modern {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
     padding: 80px 0;
+    color: white;
     position: relative;
     overflow: hidden;
 }
@@ -471,31 +254,33 @@ include_once 'includes/header.php';
     left: 0;
     right: 0;
     bottom: 0;
-    background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="20" cy="20" r="1" fill="rgba(255,255,255,0.1)"/><circle cx="80" cy="40" r="0.5" fill="rgba(255,255,255,0.1)"/><circle cx="40" cy="80" r="1.5" fill="rgba(255,255,255,0.1)"/></svg>');
-    animation: float 20s infinite linear;
-}
-
-.page-header-content {
-    position: relative;
-    z-index: 2;
+    background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 20"><defs><radialGradient id="a" cx="50%" cy="0%" r="100%"><stop offset="0%" stop-color="white" stop-opacity="0.1"/><stop offset="100%" stop-color="white" stop-opacity="0"/></radialGradient></defs><ellipse cx="50" cy="0" rx="50" ry="20" fill="url(%23a)"/></svg>');
+    background-size: 100% 100%;
 }
 
 .page-badge {
     background: rgba(255, 255, 255, 0.2);
     padding: 8px 16px;
-    border-radius: 50px;
+    border-radius: 20px;
     font-size: 0.9rem;
     font-weight: 600;
-    margin-bottom: 16px;
     display: inline-block;
+    margin-bottom: 16px;
     backdrop-filter: blur(10px);
 }
 
 .page-title {
     font-size: 3.5rem;
     font-weight: 800;
-    line-height: 1.2;
     margin-bottom: 16px;
+    line-height: 1.1;
+}
+
+.text-gradient {
+    background: linear-gradient(135deg, #ffd89b 0%, #19547b 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
 }
 
 .page-subtitle {
@@ -506,130 +291,114 @@ include_once 'includes/header.php';
 
 .page-actions {
     text-align: right;
-    position: relative;
-    z-index: 2;
 }
 
+/* Cart Section Modern */
 .cart-section-modern {
     padding: 80px 0;
-    background: white;
+    background: #f8f9ff;
+    min-height: 600px;
 }
 
 .empty-cart-modern {
     text-align: center;
-    max-width: 600px;
-    margin: 0 auto;
+    background: white;
+    border-radius: 20px;
     padding: 80px 40px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.08);
+    border: 1px solid rgba(0, 0, 0, 0.05);
 }
 
 .empty-cart-icon {
-    font-size: 5rem;
-    color: #9ca3af;
-    margin-bottom: 32px;
-}
-
-.empty-cart-modern h4 {
-    font-size: 2rem;
-    font-weight: 700;
-    color: #1e293b;
-    margin-bottom: 16px;
-}
-
-.empty-cart-modern p {
-    font-size: 1.1rem;
-    color: #64748b;
-    margin-bottom: 40px;
-    line-height: 1.6;
-}
-
-.empty-cart-actions {
-    margin-bottom: 50px;
-}
-
-.suggested-categories h6 {
-    color: #1e293b;
-    font-weight: 600;
-    margin-bottom: 20px;
-}
-
-.category-links {
-    display: flex;
-    gap: 16px;
-    justify-content: center;
-    flex-wrap: wrap;
-}
-
-.category-link {
+    width: 120px;
+    height: 120px;
+    margin: 0 auto 32px;
+    background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+    border-radius: 50%;
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 12px 20px;
-    background: #f8f9ff;
-    border: 2px solid #e2e8f0;
-    border-radius: 12px;
-    color: #64748b;
-    text-decoration: none;
-    font-weight: 500;
-    transition: all 0.3s ease;
+    justify-content: center;
+    font-size: 3rem;
+    color: #94a3b8;
 }
 
-.category-link:hover {
-    border-color: #667eea;
-    color: #667eea;
-    background: white;
+.cart-container-modern {
+    display: grid;
+    grid-template-columns: 1fr 400px;
+    gap: 40px;
+    align-items: start;
 }
 
-.cart-items-card, .cart-summary-modern {
+.cart-items-container {
     background: white;
     border-radius: 20px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.08);
     border: 1px solid rgba(0, 0, 0, 0.05);
 }
 
 .cart-header {
-    padding: 24px;
+    padding: 32px 32px 24px;
     border-bottom: 1px solid #f1f5f9;
     display: flex;
     justify-content: space-between;
     align-items: center;
 }
 
-.cart-header h5 {
+.cart-title {
+    font-size: 1.5rem;
+    font-weight: 700;
     color: #1e293b;
-    font-weight: 600;
     margin: 0;
-}
-
-.cart-actions-header {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 12px;
 }
 
-.item-count {
-    background: #f1f5f9;
-    color: #64748b;
+.cart-count {
+    background: #667eea;
+    color: white;
     padding: 4px 12px;
-    border-radius: 50px;
-    font-size: 0.8rem;
-    font-weight: 500;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.cart-actions {
+    display: flex;
+    gap: 12px;
+}
+
+.btn-clear {
+    background: #ef4444;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.btn-clear:hover {
+    background: #dc2626;
+    transform: translateY(-1px);
 }
 
 .cart-items-list {
-    padding: 0;
+    padding: 0 32px 32px;
 }
 
 .cart-item-modern {
     display: flex;
     align-items: center;
     gap: 20px;
-    padding: 24px;
+    padding: 24px 0;
     border-bottom: 1px solid #f1f5f9;
-    transition: all 0.3s ease;
-}
-
-.cart-item-modern:hover {
-    background: #f8f9ff;
 }
 
 .cart-item-modern:last-child {
@@ -657,139 +426,142 @@ include_once 'includes/header.php';
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #9ca3af;
+    color: #94a3b8;
     font-size: 2rem;
 }
 
 .item-details {
     flex: 1;
+    min-width: 0;
 }
 
 .item-name {
+    font-size: 1.1rem;
     font-weight: 600;
     color: #1e293b;
-    margin-bottom: 4px;
-    font-size: 1.1rem;
+    margin: 0 0 6px 0;
+    line-height: 1.3;
 }
 
 .item-brand {
     color: #64748b;
     font-size: 0.9rem;
-    margin-bottom: 8px;
+    margin: 0 0 8px 0;
 }
 
 .item-price {
-    font-size: 1.1rem;
-    font-weight: 600;
     color: #667eea;
-    margin-bottom: 8px;
-}
-
-.stock-info {
-    font-size: 0.8rem;
-}
-
-.stock-warning {
-    color: #f59e0b;
-}
-
-.stock-available {
-    color: #10b981;
+    font-weight: 600;
+    font-size: 0.95rem;
 }
 
 .item-quantity {
+    display: flex;
+    align-items: center;
+    gap: 12px;
     margin: 0 20px;
 }
 
 .quantity-controls {
     display: flex;
     align-items: center;
-    border: 2px solid #e2e8f0;
+    background: #f8fafc;
     border-radius: 8px;
-    overflow: hidden;
+    padding: 4px;
 }
 
 .quantity-btn {
-    width: 40px;
-    height: 40px;
+    width: 32px;
+    height: 32px;
     border: none;
-    background: #f8f9ff;
-    color: #667eea;
+    background: white;
+    border-radius: 6px;
+    color: #374151;
+    font-weight: 600;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .quantity-btn:hover {
     background: #667eea;
     color: white;
+    transform: scale(1.05);
+}
+
+.quantity-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
 }
 
 .quantity-input {
-    width: 60px;
-    height: 40px;
-    border: none;
+    width: 50px;
     text-align: center;
+    border: none;
+    background: transparent;
     font-weight: 600;
-    background: white;
-}
-
-.quantity-input:focus {
-    outline: none;
+    color: #1e293b;
+    padding: 8px 4px;
 }
 
 .item-total {
-    text-align: right;
-    margin-right: 20px;
-}
-
-.total-price {
-    font-size: 1.2rem;
+    font-size: 1.1rem;
     font-weight: 700;
     color: #1e293b;
+    margin-right: 20px;
+    min-width: 80px;
+    text-align: right;
 }
 
 .item-remove {
     flex-shrink: 0;
 }
 
-.remove-btn {
-    width: 40px;
-    height: 40px;
+.btn-remove {
+    width: 36px;
+    height: 36px;
     border: none;
-    background: #fee2e2;
+    background: #fef2f2;
     color: #ef4444;
     border-radius: 8px;
     cursor: pointer;
     transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
-.remove-btn:hover {
+.btn-remove:hover {
     background: #ef4444;
     color: white;
+    transform: scale(1.1);
 }
 
+/* Cart Summary */
 .cart-summary-modern {
+    background: white;
+    border-radius: 20px;
+    padding: 32px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.08);
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    height: fit-content;
     position: sticky;
-    top: 100px;
+    top: 24px;
 }
 
-.summary-header {
-    padding: 24px 24px 0;
-    margin-bottom: 20px;
-}
-
-.summary-header h5 {
+.summary-title {
+    font-size: 1.3rem;
+    font-weight: 700;
     color: #1e293b;
-    font-weight: 600;
-    margin: 0;
+    margin: 0 0 24px 0;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #f1f5f9;
 }
 
-.summary-details {
-    padding: 0 24px;
-    margin-bottom: 24px;
-}
-
-.summary-line {
+.summary-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -851,6 +623,18 @@ include_once 'includes/header.php';
     font-size: 1.1rem;
     font-weight: 600;
     margin-bottom: 12px;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    border: none;
+    border-radius: 12px;
+    color: white;
+    width: 100%;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.checkout-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
 }
 
 .checkout-note {
@@ -996,6 +780,222 @@ include_once 'includes/header.php';
 }
 </style>
 
+<!-- Modern Page Header -->
+<section class="page-header-modern">
+    <div class="container">
+        <div class="row align-items-center">
+            <div class="col-lg-6">
+                <div class="page-header-content">
+                    <span class="page-badge">🛒 Shopping Cart</span>
+                    <h1 class="page-title">Your Shopping <span class="text-gradient">Cart</span></h1>
+                    <p class="page-subtitle">Review your selected items before checkout</p>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="page-actions">
+                    <a href="shop.php" class="btn btn-outline-light">
+                        <i class="fas fa-store me-2"></i> Continue Shopping
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Cart Content -->
+<section class="cart-section-modern">
+    <div class="container">
+        <?php if (empty($cart_data['items'])): ?>
+            <!-- Empty Cart State -->
+            <div class="empty-cart-modern">
+                <div class="empty-cart-icon">
+                    <i class="fas fa-shopping-cart"></i>
+                </div>
+                <h4>Your cart is empty!</h4>
+                <p>Looks like you haven't added any items to your cart yet.</p>
+                <a href="shop.php" class="btn btn-primary btn-lg mt-3">
+                    <i class="fas fa-shopping-bag me-2"></i> Start Shopping
+                </a>
+            </div>
+        <?php else: ?>
+            <!-- Cart Items -->
+            <div class="cart-container-modern">
+                <div class="cart-items-container">
+                    <div class="cart-header">
+                        <h4 class="cart-title">
+                            <i class="fas fa-shopping-cart"></i>
+                            Cart Items
+                            <span class="cart-count"><?php echo count($cart_data['items']); ?> items</span>
+                        </h4>
+                        <div class="cart-actions">
+                            <div class="cart-actions">
+                                <form method="post" style="display: inline;">
+                                    <input type="hidden" name="action" value="clear">
+                                    <button type="submit" class="btn-clear" onclick="return confirm('Are you sure you want to clear your cart?')">
+                                        <i class="fas fa-trash-alt me-1"></i> Clear Cart
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="cart-items-list">
+                        <?php foreach ($cart_data['items'] as $item): ?>
+                            <div class="cart-item-modern">
+                                <div class="item-image">
+                                    <?php if (!empty($item['image'])): ?>
+                                        <img src="assets/images/products/<?php echo htmlspecialchars($item['image']); ?>" alt="<?php echo htmlspecialchars($item['name']); ?>">
+                                    <?php else: ?>
+                                        <div class="image-placeholder">
+                                            <i class="fas fa-image"></i>
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
+                                
+                                <div class="item-details">
+                                    <h6 class="item-name"><?php echo htmlspecialchars($item['name']); ?></h6>
+                                    <p class="item-brand"><?php echo htmlspecialchars($item['brand']); ?></p>
+                                    <div class="item-price">Rs.<?php echo number_format($item['price'], 2); ?></div>
+                                </div>
+                                
+                                <div class="item-quantity">
+                                    <div class="quantity-controls">
+                                        <form method="post" style="display: inline;">
+                                            <input type="hidden" name="action" value="update">
+                                            <input type="hidden" name="cart_item_id" value="<?php echo $item['id']; ?>">
+                                            <input type="hidden" name="quantity" value="<?php echo max(1, $item['quantity'] - 1); ?>">
+                                            <button type="submit" class="quantity-btn" onclick="changeQuantity(this, -1)">-</button>
+                                        </form>
+                                        
+                                        <input type="number" class="quantity-input" value="<?php echo $item['quantity']; ?>" min="1" max="<?php echo $item['stock']; ?>" readonly>
+                                        
+                                        <form method="post" style="display: inline;">
+                                            <input type="hidden" name="action" value="update">
+                                            <input type="hidden" name="cart_item_id" value="<?php echo $item['id']; ?>">
+                                            <input type="hidden" name="quantity" value="<?php echo $item['quantity'] + 1; ?>">
+                                            <button type="submit" class="quantity-btn" onclick="changeQuantity(this, 1)" <?php echo ($item['quantity'] >= $item['stock']) ? 'disabled' : ''; ?>>+</button>
+                                        </form>
+                                    </div>
+                                </div>
+                                
+                                <div class="item-total">
+                                    Rs.<?php echo number_format($item['subtotal'], 2); ?>
+                                </div>
+                                
+                                <div class="item-remove">
+                                    <form method="post" style="display: inline;">
+                                        <input type="hidden" name="action" value="remove">
+                                        <input type="hidden" name="cart_item_id" value="<?php echo $item['id']; ?>">
+                                        <button type="submit" class="btn-remove" onclick="return confirm('Remove this item from cart?')">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+
+                <!-- Cart Summary -->
+                <div class="cart-summary-modern">
+                    <h4 class="summary-title">Order Summary</h4>
+                    
+                    <div class="summary-row">
+                        <span>Subtotal (<?php echo count($cart_data['items']); ?> items):</span>
+                        <span>Rs.<?php echo number_format($cart_data['total'], 2); ?></span>
+                    </div>
+                    
+                    <div class="summary-row">
+                        <span>Shipping:</span>
+                        <span class="free-shipping">Free</span>
+                    </div>
+                    
+                    <hr class="summary-divider">
+                    
+                    <div class="summary-total">
+                        <span>Total:</span>
+                        <span>Rs.<?php echo number_format($cart_data['total'], 2); ?></span>
+                    </div>
+                    
+                    <!-- Promo Code Section -->
+                    <div class="promo-section">
+                        <div class="promo-header">
+                            <h6>Have a promo code?</h6>
+                        </div>
+                        <div class="input-group">
+                            <input type="text" class="form-control promo-input" id="promo_code" placeholder="Enter code">
+                            <button class="btn btn-outline-secondary" type="button" onclick="applyPromo()">Apply</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Checkout Section -->
+                    <div class="checkout-section">
+                        <form method="post">
+                            <input type="hidden" name="action" value="checkout">
+                            <button type="submit" class="checkout-btn">
+                                <i class="fas fa-credit-card me-2"></i> Proceed to Checkout
+                            </button>
+                        </form>
+                        <p class="checkout-note">Free shipping and returns</p>
+                    </div>
+                    
+                    <!-- Payment Methods -->
+                    <div class="payment-methods">
+                        <h6>We accept</h6>
+                        <div class="payment-icons">
+                            <i class="fab fa-cc-visa"></i>
+                            <i class="fab fa-cc-mastercard"></i>
+                            <i class="fab fa-cc-paypal"></i>
+                            <i class="fab fa-cc-amex"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        <?php endif; ?>
+    </div>
+</section>
+
+<!-- Recommendations Section -->
+<section class="recommendations-section">
+    <div class="container">
+        <div class="section-header">
+            <h3>You might also like</h3>
+            <p>Complete your pet care collection with these popular items</p>
+        </div>
+        
+        <div class="recommendations-grid">
+            <?php
+            // Get some random products for recommendations
+            $rec_sql = "SELECT * FROM pet_food_and_accessories ORDER BY RAND() LIMIT 6";
+            $rec_result = $conn->query($rec_sql);
+            
+            if ($rec_result && $rec_result->num_rows > 0):
+                while ($product = $rec_result->fetch_assoc()):
+            ?>
+                <div class="product-card-mini">
+                    <div class="product-image">
+                        <?php if (!empty($product['image'])): ?>
+                            <img src="assets/images/products/<?php echo htmlspecialchars($product['image']); ?>" alt="<?php echo htmlspecialchars($product['name']); ?>">
+                        <?php else: ?>
+                            <div class="image-placeholder">
+                                <i class="fas fa-image"></i>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                    <h6><?php echo htmlspecialchars($product['name']); ?></h6>
+                    <div class="price">Rs.<?php echo number_format($product['price'], 2); ?></div>
+                    <button class="btn btn-sm btn-primary" onclick="addToCart(<?php echo $product['productID']; ?>)">
+                        <i class="fas fa-cart-plus"></i> Add to Cart
+                    </button>
+                </div>
+            <?php 
+                endwhile;
+            endif;
+            ?>
+        </div>
+    </div>
+</section>
+
 <script>
 function changeQuantity(button, change) {
     const input = button.closest('.quantity-controls').querySelector('.quantity-input');
@@ -1018,9 +1018,54 @@ function applyPromo() {
         alert('Please enter a promo code.');
     }
 }
+
+function addToCart(productId) {
+    // Add to cart functionality
+    const formData = new FormData();
+    formData.append('action', 'add');
+    formData.append('product_id', productId);
+    formData.append('quantity', 1);
+    
+    fetch('cart_process.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Product added to cart!');
+            location.reload();
+        } else {
+            alert('Error: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while adding to cart.');
+    });
+}
 </script>
 
 <?php
+// Display messages
+if (isset($_SESSION['error_message'])):
+?>
+<script>
+    alert('<?php echo addslashes($_SESSION['error_message']); ?>');
+</script>
+<?php 
+unset($_SESSION['error_message']);
+endif;
+
+if (isset($_SESSION['success_message'])):
+?>
+<script>
+    alert('<?php echo addslashes($_SESSION['success_message']); ?>');
+</script>
+<?php 
+unset($_SESSION['success_message']);
+endif;
+
 // Include footer
 include_once 'includes/footer.php';
 
