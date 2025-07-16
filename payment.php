@@ -1,61 +1,36 @@
 <?php
-// AJAX Payment Handler - Must be first, before any output
+// Handle AJAX payment processing
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_payment'])) {
-    if (session_status() == PHP_SESSION_NONE) {
-        session_start();
-    }
-    
     header('Content-Type: application/json');
+    
+    // Start transaction
     require_once 'config/db_connect.php';
+    $conn->autocommit(FALSE);
     
     try {
-        if (!isset($_SESSION['user_id'])) {
-            throw new Exception("You must be logged in to make a payment.");
+        session_start();
+        $user_id = $_SESSION['user_id'] ?? null;
+        
+        if (!$user_id) {
+            throw new Exception("User not logged in.");
         }
-
-        $user_id = $_SESSION['user_id'];
-        $payment_method_raw = trim($_POST['payment_method']);
         
-        // Shorten payment method names to fit database column
-        $payment_method_map = [
-            'credit_card' => 'card',
-            'paypal' => 'paypal',
-            'bank_transfer' => 'bank',
-            'cash_on_delivery' => 'cod'
-        ];
-        $payment_method = $payment_method_map[$payment_method_raw] ?? 'card';
-        
-        // Determine payment type (cart or booking)
-        $cart_id = isset($_GET['cart_id']) ? intval($_GET['cart_id']) : null;
-        $booking_id = isset($_GET['booking_id']) ? intval($_GET['booking_id']) : null;
+        // Get payment data
+        $payment_method_raw = $_POST['payment_method'] ?? '';
+        $payment_method = htmlspecialchars($payment_method_raw);
+        $cart_id = isset($_POST['cart_id']) ? intval($_POST['cart_id']) : null;
+        $booking_id = isset($_POST['booking_id']) ? intval($_POST['booking_id']) : null;
         
         if (!$cart_id && !$booking_id) {
             throw new Exception("Invalid payment request.");
         }
-
-        $conn->autocommit(FALSE);
         
         $total_amount = 0;
         
         if ($cart_id) {
-            // Cart payment
-            $cart_sql = "SELECT c.*, po.fullName, po.email, po.address, po.contact FROM cart c 
-                         JOIN pet_owner po ON c.userID = po.userID 
-                         WHERE c.cartID = ? AND c.userID = ?";
-            $cart_stmt = $conn->prepare($cart_sql);
-            $cart_stmt->bind_param("ii", $cart_id, $user_id);
-            $cart_stmt->execute();
-            $cart_result = $cart_stmt->get_result();
-            
-            if ($cart_result->num_rows === 0) {
-                throw new Exception("Cart not found.");
-            }
-            
-            $cart = $cart_result->fetch_assoc();
-            $cart_stmt->close();
-            
-            // Calculate total
-            $total_sql = "SELECT SUM(quantity * price) as total FROM cart_items WHERE cartID = ?";
+            // Cart payment - get total amount
+            $total_sql = "SELECT SUM(ci.quantity * ci.price) as total 
+                         FROM cart_items ci WHERE ci.cartID = ?";
             $total_stmt = $conn->prepare($total_sql);
             $total_stmt->bind_param("i", $cart_id);
             $total_stmt->execute();
@@ -86,26 +61,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_payment'])) {
             throw new Exception("Invalid amount.");
         }
         
-        // Insert payment - FIXED: single character status
-        $payment_status = ($payment_method_raw === 'cash_on_delivery') ? 'P' : 'C';
-        $payment_sql = "INSERT INTO payment (amount, paymentDate, payment_method, status, cartID, bookingID) VALUES (?, NOW(), ?, ?, ?, ?)";
-        $payment_stmt = $conn->prepare($payment_sql);
-        $payment_stmt->bind_param("dssii", $total_amount, $payment_method, $payment_status, $cart_id, $booking_id);
+        // Insert payment - FIXED: Handle NULL foreign keys
+        $payment_status = ($payment_method_raw === 'cash_on_delivery') ? 'Pending' : 'Completed';
+        
+        if ($cart_id) {
+            $payment_sql = "INSERT INTO payment (amount, paymentDate, payment_method, status, cartID) VALUES (?, NOW(), ?, ?, ?)";
+            $payment_stmt = $conn->prepare($payment_sql);
+            $payment_stmt->bind_param("dssi", $total_amount, $payment_method, $payment_status, $cart_id);
+        } else {
+            $payment_sql = "INSERT INTO payment (amount, paymentDate, payment_method, status, bookingID) VALUES (?, NOW(), ?, ?, ?)";
+            $payment_stmt = $conn->prepare($payment_sql);
+            $payment_stmt->bind_param("dssi", $total_amount, $payment_method, $payment_status, $booking_id);
+        }
         $payment_stmt->execute();
         $payment_stmt->close();
         
-        // Update order/booking status
-        if ($cart_id && isset($cart['orderID']) && $cart['orderID']) {
-            $order_status = ($payment_method === 'cash_on_delivery') ? 'pending' : 'paid';
-            $update_order_sql = "UPDATE `order` SET status = ? WHERE orderID = ?";
-            $update_order_stmt = $conn->prepare($update_order_sql);
-            $update_order_stmt->bind_param("si", $order_status, $cart['orderID']);
-            $update_order_stmt->execute();
-            $update_order_stmt->close();
+        // Update order/booking status - FIXED: Use ENUM values
+        if ($cart_id) {
+            // Check if cart has associated order
+            $cart_check_sql = "SELECT orderID FROM cart WHERE cartID = ?";
+            $cart_check_stmt = $conn->prepare($cart_check_sql);
+            $cart_check_stmt->bind_param("i", $cart_id);
+            $cart_check_stmt->execute();
+            $cart_check_result = $cart_check_stmt->get_result();
+            $cart_data = $cart_check_result->fetch_assoc();
+            $cart_check_stmt->close();
+            
+            if ($cart_data && $cart_data['orderID']) {
+                $order_status = ($payment_method_raw === 'cash_on_delivery') ? 'Pending' : 'Completed';
+                $update_order_sql = "UPDATE `order` SET status = ? WHERE orderID = ?";
+                $update_order_stmt = $conn->prepare($update_order_sql);
+                $update_order_stmt->bind_param("si", $order_status, $cart_data['orderID']);
+                $update_order_stmt->execute();
+                $update_order_stmt->close();
+            }
         }
         
         if ($booking_id) {
-            $booking_status = ($payment_method === 'cash_on_delivery') ? 'confirmed' : 'paid';
+            $booking_status = ($payment_method_raw === 'cash_on_delivery') ? 'Pending' : 'Completed';
             $update_booking_sql = "UPDATE booking SET status = ? WHERE bookingID = ?";
             $update_booking_stmt = $conn->prepare($update_booking_sql);
             $update_booking_stmt->bind_param("si", $booking_status, $booking_id);
@@ -113,7 +106,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_payment'])) {
             $update_booking_stmt->close();
         }
         
-        // Update stock for completed cart payments
+        // Update stock for completed cart payments - FIXED: Use 'Completed'
         if ($cart_id && $payment_status === 'Completed') {
             $stock_sql = "SELECT productID, quantity FROM cart_items WHERE cartID = ?";
             $stock_stmt = $conn->prepare($stock_sql);
@@ -134,7 +127,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_payment'])) {
         $conn->commit();
         $conn->autocommit(TRUE);
         
-        $message = ($payment_method === 'cash_on_delivery') ? 
+        $message = ($payment_method_raw === 'cash_on_delivery') ? 
                    "Order placed successfully! You will pay cash on delivery." :
                    "Payment completed successfully! Your order has been confirmed.";
         
@@ -232,7 +225,7 @@ if ($cart_id) {
 
     if ($booking_result->num_rows === 0) {
         $_SESSION['error_message'] = "Booking not found.";
-        header("Location: bookings.php");
+        header("Location: user/bookings.php");
         exit();
     }
 
@@ -283,7 +276,7 @@ include_once 'includes/header.php';
                             <i class="fas fa-arrow-left me-2"></i>Back to Cart
                         </a>
                     <?php else: ?>
-                        <a href="bookings.php" class="btn btn-glass">
+                        <a href="user/bookings.php" class="btn btn-glass">
                             <i class="fas fa-arrow-left me-2"></i>Back to Bookings
                         </a>
                     <?php endif; ?>
@@ -303,194 +296,190 @@ include_once 'includes/header.php';
                     <!-- Customer Information -->
                     <div class="section-header">
                         <h3 class="section-title">
-                            <i class="fas fa-user"></i>
-                            Customer Information
+                            <i class="fas fa-user me-2"></i>Customer Information
                         </h3>
                     </div>
-                    
-                    <div class="customer-details">
+                    <div class="section-content">
                         <div class="row">
                             <div class="col-md-6">
                                 <div class="detail-item">
                                     <label>Full Name</label>
-                                    <p><?php echo htmlspecialchars($customer_info['fullName']); ?></p>
+                                    <p><?php echo htmlspecialchars($customer_info['fullName'] ?? 'N/A'); ?></p>
                                 </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="detail-item">
                                     <label>Email</label>
-                                    <p><?php echo htmlspecialchars($customer_info['email']); ?></p>
+                                    <p><?php echo htmlspecialchars($customer_info['email'] ?? 'N/A'); ?></p>
                                 </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="detail-item">
                                     <label>Contact</label>
-                                    <p><?php echo htmlspecialchars($customer_info['contact'] ?: 'Not provided'); ?></p>
+                                    <p><?php echo htmlspecialchars($customer_info['contact'] ?? 'N/A'); ?></p>
                                 </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="detail-item">
                                     <label>Address</label>
-                                    <p><?php echo htmlspecialchars($customer_info['address'] ?: 'Not provided'); ?></p>
+                                    <p><?php echo htmlspecialchars($customer_info['address'] ?? 'N/A'); ?></p>
                                 </div>
                             </div>
                         </div>
                     </div>
 
                     <!-- Payment Methods -->
-                    <div class="section-header mt-4">
+                    <div class="section-header">
                         <h3 class="section-title">
-                            <i class="fas fa-credit-card"></i>
-                            Payment Method
+                            <i class="fas fa-credit-card me-2"></i>Payment Method
                         </h3>
                     </div>
-
-                    <div id="message-container"></div>
-
-                    <form id="payment-form">
-                        <div class="payment-methods">
-                            <div class="payment-option" data-method="credit_card">
-                                <input type="radio" name="payment_method" value="credit_card" id="credit_card">
-                                <label for="credit_card">
-                                    <div class="method-icon">
-                                        <i class="fas fa-credit-card"></i>
-                                    </div>
-                                    <div class="method-info">
-                                        <h6>Credit/Debit Card</h6>
-                                        <p>Pay securely with your card</p>
-                                    </div>
-                                </label>
-                            </div>
-
-                            <div class="payment-option" data-method="paypal">
-                                <input type="radio" name="payment_method" value="paypal" id="paypal">
-                                <label for="paypal">
-                                    <div class="method-icon paypal">
-                                        <i class="fab fa-paypal"></i>
-                                    </div>
-                                    <div class="method-info">
-                                        <h6>PayPal</h6>
-                                        <p>Pay with your PayPal account</p>
-                                    </div>
-                                </label>
-                            </div>
-
-                            <div class="payment-option" data-method="bank_transfer">
-                                <input type="radio" name="payment_method" value="bank_transfer" id="bank_transfer">
-                                <label for="bank_transfer">
-                                    <div class="method-icon bank">
-                                        <i class="fas fa-university"></i>
-                                    </div>
-                                    <div class="method-info">
-                                        <h6>Bank Transfer</h6>
-                                        <p>Direct bank transfer</p>
-                                    </div>
-                                </label>
-                            </div>
-
-                            <div class="payment-option" data-method="cash_on_delivery">
-                                <input type="radio" name="payment_method" value="cash_on_delivery" id="cash_on_delivery">
-                                <label for="cash_on_delivery">
-                                    <div class="method-icon cash">
-                                        <i class="fas fa-money-bill-wave"></i>
-                                    </div>
-                                    <div class="method-info">
-                                        <h6>Cash on Delivery</h6>
-                                        <p>Pay when you receive</p>
-                                    </div>
-                                </label>
-                            </div>
-                        </div>
-
-                        <!-- Card Details -->
-                        <div class="card-details" id="card-details">
-                            <h5><i class="fas fa-lock me-2"></i>Card Details</h5>
+                    <div class="section-content">
+                        <form id="payment-form">
+                            <input type="hidden" name="ajax_payment" value="1">
+                            <input type="hidden" name="cart_id" value="<?php echo $cart_id; ?>">
+                            <input type="hidden" name="booking_id" value="<?php echo $booking_id; ?>">
                             
-                            <div class="row">
-                                <div class="col-12">
-                                    <div class="form-group">
-                                        <label>Cardholder Name</label>
-                                        <input type="text" class="form-control" id="cardholder_name" name="cardholder_name" placeholder="John Doe">
-                                    </div>
+                            <div class="payment-methods">
+                                <!-- Credit/Debit Card -->
+                                <div class="payment-option" data-method="card">
+                                    <input type="radio" name="payment_method" value="credit_debit_card" id="card">
+                                    <label for="card">
+                                        <div class="method-icon">
+                                            <i class="fas fa-credit-card"></i>
+                                        </div>
+                                        <div class="method-info">
+                                            <h6>Credit/Debit Card</h6>
+                                            <p>Pay securely with your card</p>
+                                        </div>
+                                    </label>
                                 </div>
-                                <div class="col-12">
-                                    <div class="form-group">
-                                        <label>Card Number</label>
-                                        <input type="text" class="form-control" id="card_number" name="card_number" placeholder="1234 5678 9012 3456" maxlength="19">
-                                    </div>
+
+                                <!-- PayPal -->
+                                <div class="payment-option" data-method="paypal">
+                                    <input type="radio" name="payment_method" value="paypal" id="paypal">
+                                    <label for="paypal">
+                                        <div class="method-icon paypal">
+                                            <i class="fab fa-paypal"></i>
+                                        </div>
+                                        <div class="method-info">
+                                            <h6>PayPal</h6>
+                                            <p>Pay with your PayPal account</p>
+                                        </div>
+                                    </label>
                                 </div>
-                                <div class="col-md-6">
-                                    <div class="form-group">
-                                        <label>Expiry Date</label>
-                                        <input type="text" class="form-control" id="expiry_date" name="expiry_date" placeholder="MM/YY" maxlength="5">
-                                    </div>
+
+                                <!-- Bank Transfer -->
+                                <div class="payment-option" data-method="bank">
+                                    <input type="radio" name="payment_method" value="bank_transfer" id="bank">
+                                    <label for="bank">
+                                        <div class="method-icon bank">
+                                            <i class="fas fa-university"></i>
+                                        </div>
+                                        <div class="method-info">
+                                            <h6>Bank Transfer</h6>
+                                            <p>Direct bank transfer</p>
+                                        </div>
+                                    </label>
                                 </div>
-                                <div class="col-md-6">
-                                    <div class="form-group">
-                                        <label>CVV</label>
-                                        <input type="text" class="form-control" id="cvv" name="cvv" placeholder="123" maxlength="4">
+
+                                <!-- Cash on Delivery -->
+                                <div class="payment-option" data-method="cash">
+                                    <input type="radio" name="payment_method" value="cash_on_delivery" id="cash">
+                                    <label for="cash">
+                                        <div class="method-icon cash">
+                                            <i class="fas fa-money-bill-wave"></i>
+                                        </div>
+                                        <div class="method-info">
+                                            <h6>Cash on Delivery</h6>
+                                            <p>Pay when you receive</p>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Card Details (shown when card is selected) -->
+                            <div id="card-details" class="card-details">
+                                <h5><i class="fas fa-credit-card me-2"></i>Card Details</h5>
+                                <div class="row">
+                                    <div class="col-12">
+                                        <div class="form-group">
+                                            <label for="card_name">Name on Card</label>
+                                            <input type="text" class="form-control" id="card_name" placeholder="John Doe">
+                                        </div>
+                                    </div>
+                                    <div class="col-12">
+                                        <div class="form-group">
+                                            <label for="card_number">Card Number</label>
+                                            <input type="text" class="form-control" id="card_number" placeholder="1234 5678 9012 3456">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label for="expiry">Expiry Date</label>
+                                            <input type="text" class="form-control" id="expiry" placeholder="MM/YY">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label for="cvv">CVV</label>
+                                            <input type="text" class="form-control" id="cvv" placeholder="123">
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
 
-                        <button type="submit" class="pay-btn" id="pay-btn" disabled>
-                            <i class="fas fa-lock me-2"></i>
-                            Pay Rs.<?php echo number_format($total_amount, 2); ?>
-                        </button>
-                    </form>
-
-                    <div class="loading-overlay" id="loading">
-                        <div class="spinner"></div>
-                        <p>Processing payment...</p>
+                            <div class="payment-submit">
+                                <button type="submit" class="btn btn-primary btn-lg w-100" id="pay-btn">
+                                    <i class="fas fa-lock me-2"></i>Complete Payment - Rs.<?php echo number_format($total_amount, 2); ?>
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             </div>
 
             <!-- Order Summary -->
             <div class="col-lg-4">
-                <div class="summary-card">
-                    <h4 class="summary-title">
-                        <i class="fas fa-shopping-cart me-2"></i>
-                        <?php echo $payment_type === 'cart' ? 'Order Summary' : 'Booking Summary'; ?>
-                    </h4>
-
+                <div class="order-summary-card">
+                    <div class="summary-header">
+                        <h4>Order Summary</h4>
+                    </div>
+                    
                     <div class="summary-items">
                         <?php foreach ($payment_items as $item): ?>
-                        <div class="summary-item">
-                            <div class="item-image">
-                                <img src="<?php echo htmlspecialchars($item['image'] ?: 'assets/images/no-image.png'); ?>" 
-                                     alt="<?php echo htmlspecialchars($item['name']); ?>">
+                            <div class="summary-item">
+                                <div class="item-image">
+                                    <img src="<?php echo htmlspecialchars($item['image'] ?? 'assets/images/default-product.jpg'); ?>" 
+                                         alt="<?php echo htmlspecialchars($item['name']); ?>">
+                                </div>
+                                <div class="item-details">
+                                    <h6><?php echo htmlspecialchars($item['name']); ?></h6>
+                                    <p><?php echo htmlspecialchars($item['brand']); ?></p>
+                                    <div class="item-meta">
+                                        <span class="quantity">Qty: <?php echo $item['quantity']; ?></span>
+                                        <span class="price">Rs.<?php echo number_format($item['price'], 2); ?></span>
+                                    </div>
+                                </div>
+                                <div class="item-total">
+                                    Rs.<?php echo number_format($item['subtotal'], 2); ?>
+                                </div>
                             </div>
-                            <div class="item-details">
-                                <h6><?php echo htmlspecialchars($item['name']); ?></h6>
-                                <p><?php echo htmlspecialchars($item['brand']); ?></p>
-                                <?php if ($payment_type === 'cart'): ?>
-                                    <span>Qty: <?php echo $item['quantity']; ?></span>
-                                <?php endif; ?>
-                            </div>
-                            <div class="item-price">
-                                Rs.<?php echo number_format($item['subtotal'], 2); ?>
-                            </div>
-                        </div>
                         <?php endforeach; ?>
                     </div>
-
-                    <div class="summary-total">
-                        <div class="total-row final">
-                            <span>Total Amount:</span>
+                    
+                    <div class="summary-totals">
+                        <div class="total-row">
+                            <span>Subtotal:</span>
                             <span>Rs.<?php echo number_format($total_amount, 2); ?></span>
                         </div>
-                    </div>
-
-                    <div class="security-info">
-                        <div class="security-item">
-                            <i class="fas fa-shield-alt"></i>
-                            <span>SSL Secured</span>
+                        <div class="total-row">
+                            <span>Shipping:</span>
+                            <span>Free</span>
                         </div>
-                        <div class="security-item">
-                            <i class="fas fa-lock"></i>
-                            <span>256-bit Encryption</span>
+                        <div class="total-row final-total">
+                            <span>Total:</span>
+                            <span>Rs.<?php echo number_format($total_amount, 2); ?></span>
                         </div>
                     </div>
                 </div>
@@ -500,115 +489,68 @@ include_once 'includes/header.php';
 </section>
 
 <style>
-/* Payment Header */
+/* Payment Styles */
 .page-header-modern {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
-    padding: 80px 0;
-    position: relative;
-    overflow: hidden;
-}
-
-.page-header-modern::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="20" cy="20" r="3" fill="rgba(255,255,255,0.1)"/><circle cx="80" cy="80" r="3" fill="rgba(255,255,255,0.1)"/></svg>');
-    opacity: 0.3;
-}
-
-.header-content {
-    position: relative;
-    z-index: 2;
+    padding: 60px 0;
+    margin-bottom: 40px;
 }
 
 .header-badge {
-    background: rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.2);
     padding: 8px 16px;
-    border-radius: 50px;
-    font-size: 0.9rem;
-    font-weight: 500;
+    border-radius: 20px;
     display: inline-block;
-    margin-bottom: 16px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    margin-bottom: 15px;
+    font-size: 0.9rem;
 }
 
 .page-title {
     font-size: 3rem;
     font-weight: 700;
-    margin-bottom: 16px;
+    margin-bottom: 10px;
 }
 
 .page-subtitle {
-    font-size: 1.2rem;
+    font-size: 1.1rem;
     opacity: 0.9;
     margin: 0;
 }
 
 .btn-glass {
-    background: rgba(255, 255, 255, 0.15);
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.3);
     color: white;
-    padding: 12px 24px;
-    border-radius: 50px;
-    text-decoration: none;
-    font-weight: 500;
-    transition: all 0.3s ease;
     backdrop-filter: blur(10px);
 }
 
-.btn-glass:hover {
-    background: rgba(255, 255, 255, 0.25);
-    color: white;
-    transform: translateY(-2px);
-}
-
-/* Payment Content */
 .payment-content {
-    padding: 80px 0;
-    background: #f8f9ff;
+    padding: 40px 0 80px;
 }
 
-.payment-card {
+.payment-card, .order-summary-card {
     background: white;
-    border-radius: 20px;
-    padding: 40px;
+    border-radius: 15px;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-    position: relative;
-}
-
-.summary-card {
-    background: white;
-    border-radius: 20px;
     padding: 30px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-    position: sticky;
-    top: 20px;
-}
-
-/* Section Headers */
-.section-header {
     margin-bottom: 30px;
 }
 
-.section-title {
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: #1e293b;
-    margin: 0;
-    display: flex;
-    align-items: center;
-    gap: 10px;
+.section-header {
+    margin-bottom: 25px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid #f1f5f9;
 }
 
-/* Customer Details */
-.customer-details {
-    background: #f8fafc;
-    padding: 25px;
-    border-radius: 15px;
+.section-title {
+    color: #1e293b;
+    font-size: 1.4rem;
+    font-weight: 600;
+    margin: 0;
+}
+
+.section-content {
     margin-bottom: 30px;
 }
 
@@ -746,98 +688,31 @@ include_once 'includes/header.php';
     border: 2px solid #e5e7eb;
     border-radius: 8px;
     font-size: 1rem;
-    transition: all 0.3s ease;
+    transition: border-color 0.3s ease;
 }
 
 .form-control:focus {
     outline: none;
     border-color: #667eea;
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
-/* Pay Button */
-.pay-btn {
-    width: 100%;
-    background: linear-gradient(135deg, #667eea, #764ba2);
-    color: white;
-    border: none;
-    padding: 15px;
-    border-radius: 12px;
-    font-size: 1.1rem;
-    font-weight: 700;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-}
-
-.pay-btn:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
-}
-
-.pay-btn:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-}
-
-/* Loading */
-.loading-overlay {
-    display: none;
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(255, 255, 255, 0.9);
-    border-radius: 20px;
-    z-index: 1000;
-    justify-content: center;
-    align-items: center;
-    flex-direction: column;
-}
-
-.loading-overlay.active {
-    display: flex;
-}
-
-.spinner {
-    border: 3px solid #f3f4f6;
-    border-top: 3px solid #667eea;
-    border-radius: 50%;
-    width: 40px;
-    height: 40px;
-    animation: spin 1s linear infinite;
-    margin-bottom: 15px;
-}
-
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
-
-/* Summary */
-.summary-title {
-    font-size: 1.3rem;
-    font-weight: 700;
+/* Order Summary */
+.summary-header h4 {
     color: #1e293b;
+    font-weight: 600;
+    margin-bottom: 20px;
+}
+
+.summary-items {
     margin-bottom: 25px;
-    display: flex;
-    align-items: center;
 }
 
 .summary-item {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 15px;
     padding: 15px 0;
     border-bottom: 1px solid #f1f5f9;
-}
-
-.summary-item:last-child {
-    border-bottom: none;
 }
 
 .item-image {
@@ -845,7 +720,6 @@ include_once 'includes/header.php';
     height: 60px;
     border-radius: 8px;
     overflow: hidden;
-    background: #f8fafc;
 }
 
 .item-image img {
@@ -871,83 +745,58 @@ include_once 'includes/header.php';
     margin-bottom: 5px;
 }
 
-.item-details span {
-    color: #64748b;
+.item-meta {
+    display: flex;
+    justify-content: space-between;
     font-size: 0.8rem;
+    color: #64748b;
 }
 
-.item-price {
+.item-total {
     font-weight: 600;
-    color: #10b981;
+    color: #1e293b;
 }
 
-.summary-total {
-    border-top: 2px solid #f1f5f9;
+.summary-totals {
     padding-top: 20px;
-    margin-top: 20px;
+    border-top: 2px solid #f1f5f9;
 }
 
 .total-row {
     display: flex;
     justify-content: space-between;
     margin-bottom: 10px;
+    color: #64748b;
 }
 
-.total-row.final {
+.total-row.final-total {
     font-size: 1.2rem;
     font-weight: 700;
     color: #1e293b;
+    padding-top: 15px;
+    border-top: 1px solid #e5e7eb;
+    margin-top: 15px;
 }
 
-.security-info {
-    margin-top: 25px;
-    padding-top: 20px;
-    border-top: 1px solid #f1f5f9;
-    display: flex;
-    gap: 15px;
+.payment-submit {
+    margin-top: 30px;
 }
 
-.security-item {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    color: #10b981;
-    font-size: 0.8rem;
-    font-weight: 500;
+.btn-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    padding: 15px 30px;
+    border-radius: 10px;
+    font-weight: 600;
+    transition: all 0.3s ease;
 }
 
-/* Messages */
-.error-message {
-    background: #fef2f2;
-    color: #dc2626;
-    padding: 15px;
-    border-radius: 8px;
-    margin-bottom: 20px;
-    border: 1px solid #fecaca;
-    display: flex;
-    align-items: center;
-    gap: 8px;
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
 }
 
-.success-message {
-    background: #f0fdf4;
-    color: #16a34a;
-    padding: 15px;
-    border-radius: 8px;
-    margin-bottom: 20px;
-    border: 1px solid #bbf7d0;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-/* Responsive */
-@media (max-width: 991px) {
-    .payment-card,
-    .summary-card {
-        padding: 25px;
-    }
-    
+@media (max-width: 768px) {
     .page-title {
         font-size: 2.5rem;
     }
@@ -955,180 +804,168 @@ include_once 'includes/header.php';
     .payment-methods {
         grid-template-columns: 1fr;
     }
-}
-
-@media (max-width: 768px) {
-    .payment-content {
-        padding: 40px 0;
-    }
     
-    .security-info {
-        flex-direction: column;
-        gap: 8px;
+    .payment-card, .order-summary-card {
+        padding: 20px;
     }
 }
 </style>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Payment method selection
     const paymentOptions = document.querySelectorAll('.payment-option');
     const cardDetails = document.getElementById('card-details');
-    const payBtn = document.getElementById('pay-btn');
-    const paymentForm = document.getElementById('payment-form');
-    const messageContainer = document.getElementById('message-container');
-    const loading = document.getElementById('loading');
-
-    // Payment method selection
+    
     paymentOptions.forEach(option => {
         option.addEventListener('click', function() {
+            // Remove selected class from all options
             paymentOptions.forEach(opt => opt.classList.remove('selected'));
+            
+            // Add selected class to clicked option
             this.classList.add('selected');
             
+            // Check the radio button
             const radio = this.querySelector('input[type="radio"]');
-            radio.checked = true;
+            if (radio) {
+                radio.checked = true;
+            }
             
-            if (radio.value === 'credit_card') {
+            // Show/hide card details
+            if (this.dataset.method === 'card') {
                 cardDetails.classList.add('active');
             } else {
                 cardDetails.classList.remove('active');
             }
-            
-            payBtn.disabled = false;
-            updatePayButtonText(radio.value);
         });
     });
-
-    function updatePayButtonText(method) {
-        const amount = 'Rs.<?php echo number_format($total_amount, 2); ?>';
-        switch(method) {
-            case 'cash_on_delivery':
-                payBtn.innerHTML = `<i class="fas fa-truck me-2"></i>Place Order - ${amount}`;
-                break;
-            case 'paypal':
-                payBtn.innerHTML = `<i class="fab fa-paypal me-2"></i>Pay with PayPal - ${amount}`;
-                break;
-            case 'bank_transfer':
-                payBtn.innerHTML = `<i class="fas fa-university me-2"></i>Pay via Bank - ${amount}`;
-                break;
-            default:
-                payBtn.innerHTML = `<i class="fas fa-lock me-2"></i>Pay ${amount}`;
+    
+    // Card validation functions
+    function validateCardNumber(number) {
+        const cleaned = number.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
+        return cleaned.length >= 13 && cleaned.length <= 19;
+    }
+    
+    function validateExpiryDate(expiry) {
+        const pattern = /^(0[1-9]|1[0-2])\/([0-9]{2})$/;
+        if (!pattern.test(expiry)) return false;
+        
+        const [month, year] = expiry.split('/');
+        const now = new Date();
+        const expiryDate = new Date(2000 + parseInt(year), parseInt(month) - 1);
+        return expiryDate > now;
+    }
+    
+    function validateCVV(cvv) {
+        return /^[0-9]{3,4}$/.test(cvv);
+    }
+    
+    function validateCardName(name) {
+        return name.trim().length >= 2 && /^[a-zA-Z\s]+$/.test(name);
+    }
+    
+    // Card input formatting
+    document.getElementById('card_number').addEventListener('input', function(e) {
+        let value = e.target.value.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
+        let formattedValue = value.match(/.{1,4}/g)?.join(' ') || value;
+        e.target.value = formattedValue;
+    });
+    
+    document.getElementById('expiry').addEventListener('input', function(e) {
+        let value = e.target.value.replace(/\D/g, '');
+        if (value.length >= 2) {
+            value = value.substring(0,2) + '/' + value.substring(2,4);
         }
-    }
-
-    // Card formatting
-    const cardNumber = document.getElementById('card_number');
-    if (cardNumber) {
-        cardNumber.addEventListener('input', function(e) {
-            let value = e.target.value.replace(/\s/g, '').replace(/[^0-9]/gi, '');
-            let formattedValue = value.match(/.{1,4}/g)?.join(' ') || value;
-            e.target.value = formattedValue;
-        });
-    }
-
-    const expiryDate = document.getElementById('expiry_date');
-    if (expiryDate) {
-        expiryDate.addEventListener('input', function(e) {
-            let value = e.target.value.replace(/\D/g, '');
-            if (value.length >= 2) {
-                value = value.substring(0, 2) + '/' + value.substring(2, 4);
-            }
-            e.target.value = value;
-        });
-    }
-
-    const cvv = document.getElementById('cvv');
-    if (cvv) {
-        cvv.addEventListener('input', function(e) {
-            e.target.value = e.target.value.replace(/[^0-9]/g, '');
-        });
-    }
-
+        e.target.value = value;
+    });
+    
+    document.getElementById('cvv').addEventListener('input', function(e) {
+        e.target.value = e.target.value.replace(/\D/g, '').substring(0,4);
+    });
+    
     // Form submission
-    paymentForm.addEventListener('submit', function(e) {
+    const form = document.getElementById('payment-form');
+    const payBtn = document.getElementById('pay-btn');
+    
+    form.addEventListener('submit', function(e) {
         e.preventDefault();
         
-        const formData = new FormData(this);
-        formData.append('ajax_payment', '1');
-        
-        const selectedMethod = document.querySelector('input[name="payment_method"]:checked').value;
-        
-        if (selectedMethod === 'credit_card' && !validateCard()) {
+        const selectedMethod = document.querySelector('input[name="payment_method"]:checked');
+        if (!selectedMethod) {
+            alert('Please select a payment method.');
             return;
         }
         
-        loading.classList.add('active');
+        // Validate card details if card payment is selected
+        if (selectedMethod.value === 'credit_debit_card') {
+            const cardName = document.getElementById('card_name').value;
+            const cardNumber = document.getElementById('card_number').value;
+            const expiry = document.getElementById('expiry').value;
+            const cvv = document.getElementById('cvv').value;
+            
+            if (!validateCardName(cardName)) {
+                alert('Please enter a valid cardholder name.');
+                return;
+            }
+            
+            if (!validateCardNumber(cardNumber)) {
+                alert('Please enter a valid card number (13-19 digits).');
+                return;
+            }
+            
+            if (!validateExpiryDate(expiry)) {
+                alert('Please enter a valid expiry date (MM/YY) in the future.');
+                return;
+            }
+            
+            if (!validateCVV(cvv)) {
+                alert('Please enter a valid CVV (3-4 digits).');
+                return;
+            }
+        }
+        
+        // Disable button and show loading
         payBtn.disabled = true;
+        payBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Processing...';
         
-        const url = `payment.php?<?php echo $cart_id ? "cart_id=$cart_id" : "booking_id=$booking_id"; ?>`;
+        // Submit form via AJAX
+        const formData = new FormData(form);
         
-        fetch(url, {
+        fetch('payment.php', {
             method: 'POST',
             body: formData
         })
         .then(response => response.json())
         .then(data => {
-            loading.classList.remove('active');
-            
             if (data.success) {
-                showMessage(data.message, 'success');
-                setTimeout(() => {
-                    <?php if ($payment_type === 'cart'): ?>
-                        window.location.href = 'cart.php';
-                    <?php else: ?>
-                        window.location.href = 'bookings.php';
-                    <?php endif; ?>
-                }, 2000);
+                alert(data.message);
+                // Redirect based on payment type
+                if (formData.get('cart_id')) {
+                    window.location.href = 'cart.php';
+                } else {
+                    window.location.href = 'user/bookings.php';
+                }
             } else {
-                showMessage(data.message, 'error');
-                payBtn.disabled = false;
+                alert('Error: ' + data.message);
             }
         })
         .catch(error => {
-            loading.classList.remove('active');
-            showMessage('Payment processing failed. Please try again.', 'error');
+            alert('An error occurred. Please try again.');
+            console.error('Error:', error);
+        })
+        .finally(() => {
+            // Re-enable button
             payBtn.disabled = false;
+            payBtn.innerHTML = '<i class="fas fa-lock me-2"></i>Complete Payment - Rs.<?php echo number_format($total_amount, 2); ?>';
         });
     });
-
-    function validateCard() {
-        const name = document.getElementById('cardholder_name').value.trim();
-        const number = document.getElementById('card_number').value.replace(/\s/g, '');
-        const expiry = document.getElementById('expiry_date').value;
-        const cvvVal = document.getElementById('cvv').value;
-
-        if (!name) {
-            showMessage('Please enter cardholder name.', 'error');
-            return false;
-        }
-        if (number.length < 13) {
-            showMessage('Please enter a valid card number.', 'error');
-            return false;
-        }
-        if (!/^\d{2}\/\d{2}$/.test(expiry)) {
-            showMessage('Please enter a valid expiry date.', 'error');
-            return false;
-        }
-        if (cvvVal.length < 3) {
-            showMessage('Please enter a valid CVV.', 'error');
-            return false;
-        }
-        return true;
-    }
-
-    function showMessage(message, type) {
-        const className = type === 'success' ? 'success-message' : 'error-message';
-        const icon = type === 'success' ? 'fas fa-check-circle' : 'fas fa-exclamation-triangle';
-        
-        messageContainer.innerHTML = `
-            <div class="${className}">
-                <i class="${icon}"></i> ${message}
-            </div>
-        `;
-    }
 });
 </script>
 
 <?php
+// Include footer
 include_once 'includes/footer.php';
+
+// Close database connection
 $conn->close();
 ?>
