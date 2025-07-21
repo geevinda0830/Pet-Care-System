@@ -246,7 +246,7 @@ window.CartManager = {
                 if (itemElement) {
                     const totalElement = itemElement.querySelector('.item-total, .total-price');
                     if (totalElement && data.item_total) {
-                        totalElement.textContent = '₱' + parseFloat(data.item_total).toFixed(2);
+                        totalElement.textContent = 'Rs.' + parseFloat(data.item_total).toFixed(2);
                     }
                 }
                 

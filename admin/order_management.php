@@ -566,7 +566,7 @@ include_once '../includes/header.php';
                 <div class="stat-label">Delivered</div>
             </div>
             <div class="stat-card">
-                <span class="stat-number revenue">₱<?php echo number_format($stats['total_revenue'], 2); ?></span>
+                <span class="stat-number revenue">Rs.<?php echo number_format($stats['total_revenue'], 2); ?></span>
                 <div class="stat-label">Total Revenue</div>
             </div>
         </div>
@@ -680,7 +680,7 @@ include_once '../includes/header.php';
                                         <strong><?php echo $order['item_count'] ?? 0; ?></strong> items
                                     </td>
                                     <td>
-                                        <strong>₱<?php echo number_format($order['total_amount'] ?? 0, 2); ?></strong>
+                                        <strong>Rs.<?php echo number_format($order['total_amount'] ?? 0, 2); ?></strong>
                                     </td>
                                     <td>
                                         <?php echo date('M d, Y', strtotime($order['date'])); ?><br>
