@@ -1,7 +1,7 @@
-/**
- * Main JavaScript file for Pet Care & Sitting System
- * Fixed version with complete validation and password toggle functionality
- */
+// /**
+//  * Main JavaScript file for Pet Care & Sitting System
+//  * Fixed version with complete validation and password toggle functionality
+//  */
 
 document.addEventListener('DOMContentLoaded', function() {
     // Initialize Bootstrap tooltips
@@ -16,7 +16,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return new bootstrap.Popover(popoverTriggerEl);
     });
     
-    // Auto-dismiss alerts after 5 seconds
+//     // Auto-dismiss alerts after 5 seconds
     setTimeout(function() {
         var alerts = document.querySelectorAll('.alert');
         alerts.forEach(function(alert) {
@@ -25,13 +25,13 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }, 5000);
     
-    // Enhanced Email Validation Function
+//     // Enhanced Email Validation Function
     function validateEmail(email) {
         const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
         return emailRegex.test(email);
     }
     
-    // Enhanced Password Validation Function
+//     // Enhanced Password Validation Function
     function validatePassword(password) {
         const minLength = password.length >= 6;
         const hasUpper = /[A-Z]/.test(password);
@@ -49,7 +49,7 @@ document.addEventListener('DOMContentLoaded', function() {
         };
     }
     
-    // Add validation feedback elements
+//     // Add validation feedback elements
     function addValidationFeedback(input, message, isValid) {
         // Remove existing feedback
         const existingFeedback = input.parentNode.querySelector('.validation-feedback');
@@ -73,7 +73,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // Real-time email validation
+//     // Real-time email validation
     const emailInputs = document.querySelectorAll('input[type="email"]');
     emailInputs.forEach(function(input) {
         input.addEventListener('blur', function() {
@@ -99,7 +99,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // Real-time password validation
+//     // Real-time password validation
     const passwordInputs = document.querySelectorAll('input[type="password"]');
     passwordInputs.forEach(function(input) {
         // Skip confirm password inputs
@@ -128,7 +128,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // Confirm password validation
+//     // Confirm password validation
     const confirmPasswordInput = document.getElementById('confirm_password');
     if (confirmPasswordInput) {
         confirmPasswordInput.addEventListener('input', function() {
@@ -147,7 +147,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Fixed Password toggle functionality
+//     // Fixed Password toggle functionality
     const passwordToggles = document.querySelectorAll('.password-toggle');
     passwordToggles.forEach(function(toggle) {
         toggle.addEventListener('click', function(e) {
@@ -173,7 +173,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // Enhanced form validation
+//     // Enhanced form validation
     const forms = document.querySelectorAll('.needs-validation, form');
     Array.prototype.slice.call(forms).forEach(function(form) {
         form.addEventListener('submit', function(event) {
@@ -210,7 +210,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             });
             
-            // Validate confirm password
+//             // Validate confirm password
             const confirmPasswordField = form.querySelector('#confirm_password');
             if (confirmPasswordField) {
                 const password = form.querySelector('#password').value;
@@ -222,7 +222,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
             
-            // Check HTML5 validation
+//             // Check HTML5 validation
             if (!form.checkValidity()) {
                 isFormValid = false;
             }
@@ -242,7 +242,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }, false);
     });
     
-    // User type selector functionality (for registration page)
+//     // User type selector functionality (for registration page)
     const userTypeInputs = document.querySelectorAll('input[name="user_type"]');
     const petSitterNotice = document.getElementById('pet-sitter-notice');
     
@@ -259,10 +259,13 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
         
-        // Initialize notice visibility
+//         // Initialize notice visibility
         const checkedInput = document.querySelector('input[name="user_type"]:checked');
         if (checkedInput && checkedInput.value === 'pet_sitter' && petSitterNotice) {
             petSitterNotice.style.display = 'block';
         }
     }
 });
+
+
+
