@@ -20,9 +20,7 @@ $base_url = "http://localhost/pet_care_system";
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="<?php echo $base_url; ?>/assets/css/style.css">
-    <!-- Favicon -->
-    <link rel="icon" href="<?php echo $base_url; ?>/assets/images/favicon.ico" type="image/x-icon">
+    <!-- <link rel="stylesheet" href="<?php echo $base_url; ?>/assets/css/style.css"> -->
     
     <style>
         /* Modern Navigation Styles */
@@ -286,14 +284,14 @@ $base_url = "http://localhost/pet_care_system";
                 </ul>
                 
                 <ul class="navbar-nav">
-                    <?php if(isset($_SESSION['user_id'])): ?>
+                    <?php if(isset($_SESSION['user_id']) && isset($_SESSION['user_type'])): ?>
                         <?php if($_SESSION['user_type'] === 'pet_owner'): ?>
                             <li class="nav-item dropdown">
                                 <a class="nav-link-modern dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                                     <div class="user-avatar">
                                         <i class="fas fa-user"></i>
                                     </div>
-                                    <?php echo $_SESSION['username']; ?>
+                                    <?php echo isset($_SESSION['username']) ? $_SESSION['username'] : 'User'; ?>
                                 </a>
                                 <ul class="dropdown-menu dropdown-menu-modern" aria-labelledby="navbarDropdown">
                                     <li><a class="dropdown-item dropdown-item-modern" href="<?php echo $base_url; ?>/user/dashboard.php">
@@ -328,7 +326,7 @@ $base_url = "http://localhost/pet_care_system";
                                     <div class="user-avatar">
                                         <i class="fas fa-hands-helping"></i>
                                     </div>
-                                    <?php echo $_SESSION['username']; ?>
+                                    <?php echo isset($_SESSION['username']) ? $_SESSION['username'] : 'Sitter'; ?>
                                 </a>
                                 <ul class="dropdown-menu dropdown-menu-modern" aria-labelledby="navbarDropdown">
                                     <li><a class="dropdown-item dropdown-item-modern" href="<?php echo $base_url; ?>/pet_sitter/dashboard.php">
