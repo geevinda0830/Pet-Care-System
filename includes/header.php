@@ -321,13 +321,13 @@ $base_url = "http://localhost/pet_care_system";
                                     <?php echo isset($_SESSION['username']) ? htmlspecialchars($_SESSION['username']) : 'Sitter'; ?>
                                 </a>
                                 <ul class="dropdown-menu dropdown-menu-modern dropdown-menu-end" aria-labelledby="navbarDropdown">
-                                    <li><a class="dropdown-item dropdown-item-modern" href="<?php echo $base_url; ?>/sitter/dashboard.php">
+                                    <li><a class="dropdown-item dropdown-item-modern" href="<?php echo $base_url; ?>/pet_sitter/dashboard.php">
                                         <i class="fas fa-tachometer-alt"></i> Dashboard
                                     </a></li>
-                                    <li><a class="dropdown-item dropdown-item-modern" href="<?php echo $base_url; ?>/sitter/bookings.php">
+                                    <li><a class="dropdown-item dropdown-item-modern" href="<?php echo $base_url; ?>/pet_sitter/bookings.php">
                                         <i class="fas fa-calendar-alt"></i> My Bookings
                                     </a></li>
-                                    <li><a class="dropdown-item dropdown-item-modern" href="<?php echo $base_url; ?>/sitter/profile.php">
+                                    <li><a class="dropdown-item dropdown-item-modern" href="<?php echo $base_url; ?>/pet_sitter/profile.php">
                                         <i class="fas fa-user-edit"></i> Profile
                                     </a></li>
                                     <li><hr class="dropdown-divider"></li>
@@ -351,7 +351,7 @@ $base_url = "http://localhost/pet_care_system";
                                     <li><a class="dropdown-item dropdown-item-modern" href="<?php echo $base_url; ?>/admin/users.php">
                                         <i class="fas fa-users"></i> Manage Users
                                     </a></li>
-                                    <li><a class="dropdown-item dropdown-item-modern" href="<?php echo $base_url; ?>/admin/products.php">
+                                    <li><a class="dropdown-item dropdown-item-modern" href="<?php echo $base_url; ?>/admin/manage_products.php">
                                         <i class="fas fa-box"></i> Manage Products
                                     </a></li>
                                     <li><hr class="dropdown-divider"></li>

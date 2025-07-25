@@ -52,6 +52,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_product'])) {
     $stock = trim($_POST['stock']);
     $description = trim($_POST['description']);
     
+    // Categories that don't need weight
+    $weight_optional_categories = ['Toys', 'Accessories', 'Dog Accessories', 'Cat Accessories'];
+    
     // Validation
     if (empty($name)) {
         $errors[] = "Product name is required.";
@@ -69,8 +72,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_product'])) {
         $errors[] = "Valid price is required.";
     }
     
-    if (empty($weight)) {
-        $errors[] = "Weight is required.";
+    // Weight validation - only required for certain categories
+    if (empty($weight) && !in_array($category, $weight_optional_categories)) {
+        $errors[] = "Weight is required for this category.";
     }
     
     if (empty($stock) || !is_numeric($stock) || $stock < 0) {
@@ -99,22 +103,33 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_product'])) {
             // Create uploads directory if it doesn't exist
             $upload_dir = '../assets/images/products/';
             if (!file_exists($upload_dir)) {
-                mkdir($upload_dir, 0777, true);
+                if (!mkdir($upload_dir, 0777, true)) {
+                    $errors[] = "Failed to create upload directory.";
+                } else {
+                    chmod($upload_dir, 0777); // Ensure write permissions
+                }
+            } else {
+                // Ensure directory is writable
+                if (!is_writable($upload_dir)) {
+                    chmod($upload_dir, 0777);
+                }
             }
             
-            // Generate unique filename
-            $file_extension = pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION);
-            $new_image_name = 'product_' . time() . '_' . uniqid() . '.' . $file_extension;
-            $upload_path = $upload_dir . $new_image_name;
-            
-            if (move_uploaded_file($_FILES['image']['tmp_name'], $upload_path)) {
-                // Delete old image if it exists
-                if ($product['image'] && file_exists($upload_dir . $product['image'])) {
-                    unlink($upload_dir . $product['image']);
+            if (empty($errors)) {
+                // Generate unique filename
+                $file_extension = pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION);
+                $new_image_name = 'product_' . time() . '_' . uniqid() . '.' . $file_extension;
+                $upload_path = $upload_dir . $new_image_name;
+                
+                if (move_uploaded_file($_FILES['image']['tmp_name'], $upload_path)) {
+                    // Delete old image if it exists
+                    if ($product['image'] && file_exists($upload_dir . $product['image'])) {
+                        unlink($upload_dir . $product['image']);
+                    }
+                    $image_name = $new_image_name;
+                } else {
+                    $errors[] = "Failed to upload image. Check directory permissions.";
                 }
-                $image_name = $new_image_name;
-            } else {
-                $errors[] = "Failed to upload image. Please try again.";
             }
         }
     }
@@ -126,6 +141,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_product'])) {
             unlink('../assets/images/products/' . $product['image']);
         }
         $image_name = '';
+    }
+    
+    // Set default weight for categories that don't need it
+    if (in_array($category, $weight_optional_categories) && empty($weight)) {
+        $weight = "N/A";
     }
     
     // If no errors, update product in database
@@ -144,36 +164,39 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_product'])) {
         } else {
             $errors[] = "Error updating product. Please try again.";
         }
-        
         $stmt->close();
     }
-    
-    // If there were errors, reload the product data with submitted values
-    if (!empty($errors)) {
-        $product['name'] = $name;
-        $product['brand'] = $brand;
-        $product['category'] = $category;
-        $product['price'] = $price;
-        $product['weight'] = $weight;
-        $product['stock'] = $stock;
-        $product['description'] = $description;
-    }
 }
 
-// Include header
-include_once '../includes/header.php';
+$conn->close();
 ?>
 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Product - Admin Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body style="font-family: 'Inter', sans-serif; background: #f8f9fa;">
+
+<?php include '../includes/header.php'; ?>
+
 <style>
-.edit-product-section {
+/* Modern Admin Styles */
+.admin-header {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
+    padding: 60px 0 40px;
     position: relative;
     overflow: hidden;
-    padding: 80px 0 60px;
 }
 
-.edit-product-particles {
+.admin-header::before {
+    content: '';
     position: absolute;
     width: 100%;
     height: 100%;
@@ -186,12 +209,7 @@ include_once '../includes/header.php';
     100% { transform: translateY(-100px) rotate(360deg); }
 }
 
-.edit-product-header-content {
-    position: relative;
-    z-index: 2;
-}
-
-.edit-product-badge {
+.admin-badge {
     display: inline-flex;
     align-items: center;
     background: rgba(255, 255, 255, 0.2);
@@ -203,104 +221,82 @@ include_once '../includes/header.php';
     font-weight: 600;
 }
 
-.edit-product-title {
-    font-size: 3rem;
+.admin-title {
+    font-size: 2.5rem;
     font-weight: 800;
-    line-height: 1.2;
-    margin-bottom: 16px;
-}
-
-.edit-product-subtitle {
-    font-size: 1.2rem;
-    opacity: 0.9;
-    line-height: 1.6;
-}
-
-.edit-product-actions {
+    margin-bottom: 10px;
     position: relative;
     z-index: 2;
 }
 
-.btn-glass {
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    color: white;
-    padding: 12px 24px;
-    border-radius: 50px;
-    backdrop-filter: blur(10px);
-    transition: all 0.3s ease;
-    margin: 0 8px;
-    text-decoration: none;
+.product-id-badge {
+    background: rgba(255, 255, 255, 0.3);
+    padding: 6px 12px;
+    border-radius: 15px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    display: inline-block;
+    margin-bottom: 15px;
 }
 
-.btn-glass:hover {
-    background: rgba(255, 255, 255, 0.2);
-    color: white;
-    transform: translateY(-2px);
+.admin-subtitle {
+    font-size: 1.1rem;
+    opacity: 0.9;
+    margin-bottom: 0;
+    position: relative;
+    z-index: 2;
 }
 
-.edit-product-content {
-    padding: 80px 0;
-    background: #f8f9fa;
+.content-section {
+    padding: 0;
+    margin-top: -30px;
+    position: relative;
+    z-index: 2;
 }
 
-.product-form-card {
+.modern-card {
     background: white;
     border-radius: 20px;
-    box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(0, 0, 0, 0.05);
     overflow: hidden;
     margin-bottom: 30px;
 }
 
-.form-header {
-    background: linear-gradient(135deg, #f8f9ff, #e8f4f8);
-    padding: 32px;
-    border-bottom: 1px solid #e5e7eb;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+.card-header-modern {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    padding: 25px 35px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
 }
 
-.form-header h4 {
-    color: #1e293b;
-    font-weight: 700;
+.card-header-modern h4 {
     margin: 0;
+    font-weight: 700;
+    color: #1e293b;
+    display: flex;
+    align-items: center;
+    gap: 10px;
 }
 
-.product-id-badge {
-    background: #667eea;
-    color: white;
-    padding: 8px 16px;
-    border-radius: 20px;
-    font-size: 0.9rem;
-    font-weight: 600;
+.card-body-modern {
+    padding: 35px;
 }
 
-.form-body {
-    padding: 40px;
+.form-group-modern {
+    margin-bottom: 25px;
 }
 
-.form-row {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 24px;
-    margin-bottom: 24px;
-}
-
-.form-group {
-    margin-bottom: 24px;
-}
-
-.form-label {
-    display: block;
+.form-label-modern {
     font-weight: 600;
     color: #374151;
     margin-bottom: 8px;
+    display: block;
     font-size: 0.95rem;
 }
 
-.required {
+.required-indicator {
     color: #ef4444;
+    margin-left: 4px;
 }
 
 .form-control-modern {
@@ -310,13 +306,15 @@ include_once '../includes/header.php';
     border-radius: 12px;
     font-size: 1rem;
     transition: all 0.3s ease;
-    background: #ffffff;
+    background: #fafafa;
 }
 
 .form-control-modern:focus {
     outline: none;
     border-color: #667eea;
+    background: white;
     box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    transform: translateY(-1px);
 }
 
 .form-select-modern {
@@ -326,121 +324,56 @@ include_once '../includes/header.php';
     border-radius: 12px;
     font-size: 1rem;
     transition: all 0.3s ease;
-    background: #ffffff;
-    cursor: pointer;
+    background: #fafafa;
+    appearance: none;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 20px;
 }
 
 .form-select-modern:focus {
     outline: none;
     border-color: #667eea;
+    background-color: white;
     box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
-.form-textarea-modern {
-    width: 100%;
-    padding: 12px 16px;
-    border: 2px solid #e5e7eb;
+.form-hint {
+    font-size: 0.85rem;
+    color: #6b7280;
+    margin-top: 6px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.weight-optional {
+    color: #10b981 !important;
+}
+
+.btn-modern {
+    padding: 14px 28px;
     border-radius: 12px;
+    font-weight: 600;
     font-size: 1rem;
     transition: all 0.3s ease;
-    background: #ffffff;
-    resize: vertical;
-    min-height: 120px;
-}
-
-.form-textarea-modern:focus {
-    outline: none;
-    border-color: #667eea;
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-}
-
-.current-image-section {
-    margin-bottom: 20px;
-    padding: 20px;
-    background: #f8f9fa;
-    border-radius: 12px;
-}
-
-.current-image {
-    max-width: 200px;
-    max-height: 200px;
-    object-fit: contain;
-    border-radius: 8px;
-    margin-bottom: 15px;
-    display: block;
-}
-
-.image-actions {
-    display: flex;
-    gap: 10px;
-}
-
-.btn-change-image, .btn-remove-image {
-    padding: 8px 16px;
-    border-radius: 8px;
-    font-size: 0.9rem;
-    font-weight: 600;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
     border: none;
     cursor: pointer;
-    transition: all 0.3s ease;
 }
 
-.btn-change-image {
-    background: #3b82f6;
+.btn-success-modern {
+    background: linear-gradient(135deg, #10b981, #059669);
     color: white;
 }
 
-.btn-change-image:hover {
-    background: #2563eb;
-}
-
-.btn-remove-image {
-    background: #ef4444;
-    color: white;
-}
-
-.btn-remove-image:hover {
-    background: #dc2626;
-}
-
-.image-upload-area {
-    border: 2px dashed #d1d5db;
-    border-radius: 12px;
-    padding: 40px 20px;
-    text-align: center;
-    background: #fafafa;
-    transition: all 0.3s ease;
-}
-
-.image-upload-area:hover {
-    border-color: #667eea;
-    background: #f0f4ff;
-}
-
-.form-actions {
-    display: flex;
-    gap: 16px;
-    justify-content: flex-end;
-    margin-top: 40px;
-    padding-top: 32px;
-    border-top: 1px solid #e5e7eb;
-}
-
-.btn-primary-modern {
-    background: linear-gradient(135deg, #667eea, #764ba2);
-    color: white;
-    border: none;
-    padding: 14px 32px;
-    border-radius: 12px;
-    font-weight: 600;
-    font-size: 1rem;
-    transition: all 0.3s ease;
-    min-width: 160px;
-}
-
-.btn-primary-modern:hover {
+.btn-success-modern:hover {
     transform: translateY(-2px);
-    box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+    box-shadow: 0 10px 30px rgba(16, 185, 129, 0.4);
     color: white;
 }
 
@@ -448,356 +381,447 @@ include_once '../includes/header.php';
     background: #f8f9fa;
     color: #6c757d;
     border: 2px solid #e5e7eb;
-    padding: 12px 32px;
-    border-radius: 12px;
-    font-weight: 600;
-    font-size: 1rem;
-    transition: all 0.3s ease;
-    text-decoration: none;
-    min-width: 160px;
-    text-align: center;
 }
 
 .btn-secondary-modern:hover {
     background: #e9ecef;
     color: #495057;
-    border-color: #d1d5db;
+    text-decoration: none;
+    transform: translateY(-1px);
 }
 
 .alert-modern {
+    border-radius: 12px;
     border: none;
-    border-radius: 16px;
-    padding: 20px 24px;
-    margin-bottom: 32px;
-    border-left: 4px solid;
+    padding: 16px 20px;
+    margin-bottom: 25px;
 }
 
-.alert-danger {
-    background: #fef2f2;
-    border-left-color: #ef4444;
+.alert-danger-modern {
+    background: linear-gradient(135deg, #fee2e2, #fecaca);
     color: #991b1b;
 }
 
-.error-list {
-    margin: 0;
-    padding-left: 20px;
+.current-image-section {
+    background: #f8f9ff;
+    border: 2px solid #e0e7ff;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
 }
 
-.error-list li {
-    margin-bottom: 8px;
+.current-image {
+    max-width: 200px;
+    max-height: 200px;
+    border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
 }
 
-.character-count {
-    text-align: right;
-    font-size: 0.8rem;
+.image-upload-area {
+    border: 2px dashed #d1d5db;
+    border-radius: 12px;
+    padding: 30px;
+    text-align: center;
+    transition: all 0.3s ease;
+    background: #fafafa;
+}
+
+.image-upload-area:hover {
+    border-color: #667eea;
+    background: #f8f9ff;
+}
+
+.upload-icon {
+    font-size: 3rem;
+    color: #9ca3af;
+    margin-bottom: 15px;
+}
+
+.upload-text {
+    color: #374151;
+    font-weight: 600;
+    margin-bottom: 5px;
+}
+
+.upload-hint {
     color: #6b7280;
-    margin-top: 4px;
+    font-size: 0.9rem;
 }
 
-.form-hint {
-    font-size: 0.85rem;
-    color: #6b7280;
-    margin-top: 4px;
-    line-height: 1.4;
+.image-preview {
+    max-width: 200px;
+    max-height: 200px;
+    border-radius: 12px;
+    margin-top: 15px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+}
+
+.breadcrumb-modern {
+    background: none;
+    padding: 0;
+    margin-bottom: 20px;
+}
+
+.breadcrumb-modern .breadcrumb-item {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.breadcrumb-modern .breadcrumb-item.active {
+    color: white;
+    font-weight: 600;
+}
+
+.breadcrumb-modern .breadcrumb-item a {
+    color: rgba(255, 255, 255, 0.9);
+    text-decoration: none;
+}
+
+.breadcrumb-modern .breadcrumb-item a:hover {
+    color: white;
+}
+
+.remove-image-checkbox {
+    background: #fee2e2;
+    border: 2px solid #fecaca;
+    border-radius: 8px;
+    padding: 10px 15px;
+    margin-top: 15px;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    color: #991b1b;
+    font-weight: 600;
 }
 
 @media (max-width: 768px) {
-    .edit-product-title {
+    .admin-title {
         font-size: 2rem;
     }
     
-    .form-body {
-        padding: 24px;
+    .card-body-modern {
+        padding: 25px;
     }
     
-    .form-header {
-        padding: 24px;
-        flex-direction: column;
-        gap: 16px;
-        text-align: center;
-    }
-    
-    .form-row {
-        grid-template-columns: 1fr;
-    }
-    
-    .form-actions {
-        flex-direction: column;
-    }
-    
-    .image-upload-area {
-        padding: 24px 16px;
+    .btn-modern {
+        width: 100%;
+        justify-content: center;
+        margin-bottom: 10px;
     }
 }
 </style>
 
-<!-- Modern Edit Product Header -->
-<section class="edit-product-section">
-    <div class="edit-product-particles"></div>
+<!-- Admin Header -->
+<section class="admin-header">
     <div class="container">
-        <div class="row align-items-center">
-            <div class="col-lg-8">
-                <div class="edit-product-header-content">
-                    <div class="edit-product-badge">
-                        <i class="fas fa-edit me-2"></i>
-                        Edit Product
-                    </div>
-                    <h1 class="edit-product-title">Edit Product</h1>
-                    <p class="edit-product-subtitle">Update product information, pricing, and inventory details.</p>
-                </div>
-            </div>
-            <div class="col-lg-4 text-lg-end">
-                <div class="edit-product-actions">
-                    <a href="manage_products.php" class="btn-glass">
-                        <i class="fas fa-arrow-left me-2"></i>Back to Products
-                    </a>
-                </div>
-            </div>
+        <div class="admin-badge">
+            <i class="fas fa-edit me-2"></i>
+            Product Management
         </div>
+        <h1 class="admin-title">Edit Product</h1>
+        <div class="product-id-badge">Product ID: #<?php echo $product['productID']; ?></div>
+        <p class="admin-subtitle">Update product information and details</p>
+        
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb breadcrumb-modern">
+                <li class="breadcrumb-item"><a href="dashboard.php">Dashboard</a></li>
+                <li class="breadcrumb-item"><a href="manage_products.php">Products</a></li>
+                <li class="breadcrumb-item active">Edit Product</li>
+            </ol>
+        </nav>
     </div>
 </section>
 
-<!-- Edit Product Content -->
-<section class="edit-product-content">
+<!-- Content Section -->
+<section class="content-section">
     <div class="container">
-        <div class="row justify-content-center">
-            <div class="col-lg-10">
-                <!-- Error Messages -->
-                <?php if (!empty($errors)): ?>
-                    <div class="alert alert-danger alert-modern">
-                        <i class="fas fa-exclamation-triangle me-2"></i>
-                        <strong>Please fix the following errors:</strong>
-                        <ul class="error-list">
-                            <?php foreach($errors as $error): ?>
-                                <li><?php echo htmlspecialchars($error); ?></li>
-                            <?php endforeach; ?>
-                        </ul>
-                    </div>
-                <?php endif; ?>
-
-                <!-- Product Form -->
-                <div class="product-form-card">
-                    <div class="form-header">
-                        <h4><i class="fas fa-edit me-2"></i>Edit Product Information</h4>
-                        <div class="product-id-badge">ID: <?php echo $product_id; ?></div>
+        
+        <?php if (!empty($errors)): ?>
+            <div class="alert alert-modern alert-danger-modern">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                <strong>Please fix the following errors:</strong>
+                <ul class="mb-0 mt-2">
+                    <?php foreach ($errors as $error): ?>
+                        <li><?php echo htmlspecialchars($error); ?></li>
+                    <?php endforeach; ?>
+                </ul>
+            </div>
+        <?php endif; ?>
+        
+        <div class="modern-card">
+            <div class="card-header-modern">
+                <h4><i class="fas fa-info-circle"></i> Product Information</h4>
+            </div>
+            
+            <div class="card-body-modern">
+                <form action="<?php echo 'edit_product.php?id=' . $product_id; ?>" method="post" enctype="multipart/form-data" id="editProductForm">
+                    
+                    <!-- Basic Information -->
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group-modern">
+                                <label class="form-label-modern">
+                                    Product Name
+                                    <span class="required-indicator">*</span>
+                                </label>
+                                <input type="text" class="form-control-modern" name="name" id="name" 
+                                       value="<?php echo htmlspecialchars($product['name']); ?>" 
+                                       placeholder="Enter product name" maxlength="100" required>
+                                <div class="form-hint">
+                                    <i class="fas fa-info-circle"></i>
+                                    Choose a descriptive and unique product name
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="form-group-modern">
+                                <label class="form-label-modern">
+                                    Brand
+                                    <span class="required-indicator">*</span>
+                                </label>
+                                <input type="text" class="form-control-modern" name="brand" id="brand" 
+                                       value="<?php echo htmlspecialchars($product['brand']); ?>" 
+                                       placeholder="Enter brand name" maxlength="50" required>
+                                <div class="form-hint">
+                                    <i class="fas fa-info-circle"></i>
+                                    Product manufacturer or brand name
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     
-                    <div class="form-body">
-                        <form action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]) . '?id=' . $product_id; ?>" method="post" enctype="multipart/form-data" id="editProductForm">
-                            <!-- Basic Information -->
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label class="form-label">Product Name <span class="required">*</span></label>
-                                    <input type="text" class="form-control-modern" name="name" id="productName" 
-                                           value="<?php echo htmlspecialchars($product['name']); ?>" 
-                                           placeholder="Enter product name" maxlength="100" required>
-                                    <div class="form-hint">Maximum 100 characters</div>
-                                </div>
-                                
-                                <div class="form-group">
-                                    <label class="form-label">Brand <span class="required">*</span></label>
-                                    <input type="text" class="form-control-modern" name="brand" id="productBrand"
-                                           value="<?php echo htmlspecialchars($product['brand']); ?>" 
-                                           placeholder="Enter brand name" maxlength="50" required>
-                                    <div class="form-hint">Product manufacturer or brand name</div>
-                                </div>
-                            </div>
-
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label class="form-label">Category <span class="required">*</span></label>
-                                    <select class="form-select-modern" name="category" required>
-                                        <option value="">Select Category</option>
-                                        <option value="Dog Food" <?php echo ($product['category'] === 'Dog Food') ? 'selected' : ''; ?>>Dog Food</option>
-                                        <option value="Cat Food" <?php echo ($product['category'] === 'Cat Food') ? 'selected' : ''; ?>>Cat Food</option>
-                                        <option value="Bird Food" <?php echo ($product['category'] === 'Bird Food') ? 'selected' : ''; ?>>Bird Food</option>
-                                        <option value="Fish Food" <?php echo ($product['category'] === 'Fish Food') ? 'selected' : ''; ?>>Fish Food</option>
-                                        <option value="Toys" <?php echo ($product['category'] === 'Toys') ? 'selected' : ''; ?>>Toys</option>
-                                        <option value="Accessories" <?php echo ($product['category'] === 'Accessories') ? 'selected' : ''; ?>>Accessories</option>
-                                        <option value="Medicine" <?php echo ($product['category'] === 'Medicine') ? 'selected' : ''; ?>>Medicine</option>
-                                        <option value="Grooming" <?php echo ($product['category'] === 'Grooming') ? 'selected' : ''; ?>>Grooming</option>
-                                    </select>
-                                    <div class="form-hint">Select the appropriate product category</div>
-                                </div>
-                                
-                                <div class="form-group">
-                                    <label class="form-label">Price (Rs.) <span class="required">*</span></label>
-                                    <input type="number" class="form-control-modern" name="price" id="productPrice"
-                                           value="<?php echo htmlspecialchars($product['price']); ?>" 
-                                           placeholder="0.00" step="0.01" min="0.01" required>
-                                    <div class="form-hint">Enter price in Sri Lankan Rupees</div>
+                    <!-- Category and Price -->
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group-modern">
+                                <label class="form-label-modern">
+                                    Category
+                                    <span class="required-indicator">*</span>
+                                </label>
+                                <select class="form-select-modern" name="category" id="category" required onchange="toggleWeightField()">
+                                    <option value="">Select Category</option>
+                                    <option value="Dog Food" <?php echo ($product['category'] === 'Dog Food') ? 'selected' : ''; ?>>Dog Food</option>
+                                    <option value="Cat Food" <?php echo ($product['category'] === 'Cat Food') ? 'selected' : ''; ?>>Cat Food</option>
+                                    <option value="Bird Food" <?php echo ($product['category'] === 'Bird Food') ? 'selected' : ''; ?>>Bird Food</option>
+                                    <option value="Fish Food" <?php echo ($product['category'] === 'Fish Food') ? 'selected' : ''; ?>>Fish Food</option>
+                                    <option value="Toys" <?php echo ($product['category'] === 'Toys') ? 'selected' : ''; ?>>Toys</option>
+                                    <option value="Accessories" <?php echo ($product['category'] === 'Accessories') ? 'selected' : ''; ?>>Accessories</option>
+                                    <option value="Dog Accessories" <?php echo ($product['category'] === 'Dog Accessories') ? 'selected' : ''; ?>>Dog Accessories</option>
+                                    <option value="Cat Accessories" <?php echo ($product['category'] === 'Cat Accessories') ? 'selected' : ''; ?>>Cat Accessories</option>
+                                    <option value="Medicine" <?php echo ($product['category'] === 'Medicine') ? 'selected' : ''; ?>>Medicine</option>
+                                    <option value="Healthcare" <?php echo ($product['category'] === 'Healthcare') ? 'selected' : ''; ?>>Healthcare</option>
+                                    <option value="Grooming" <?php echo ($product['category'] === 'Grooming') ? 'selected' : ''; ?>>Grooming</option>
+                                </select>
+                                <div class="form-hint">
+                                    <i class="fas fa-info-circle"></i>
+                                    Select the most appropriate category
                                 </div>
                             </div>
-
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label class="form-label">Weight <span class="required">*</span></label>
-                                    <input type="text" class="form-control-modern" name="weight" id="productWeight"
-                                           value="<?php echo htmlspecialchars($product['weight']); ?>" 
-                                           placeholder="e.g., 1kg, 500g, 2.5kg" required>
-                                    <div class="form-hint">Include unit of measurement (kg, g, lbs, etc.)</div>
-                                </div>
-                                
-                                <div class="form-group">
-                                    <label class="form-label">Stock Quantity <span class="required">*</span></label>
-                                    <input type="number" class="form-control-modern" name="stock" id="productStock"
-                                           value="<?php echo htmlspecialchars($product['stock']); ?>" 
-                                           placeholder="0" min="0" required>
-                                    <div class="form-hint">Available quantity in inventory</div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="form-group-modern">
+                                <label class="form-label-modern">
+                                    Price (Rs.)
+                                    <span class="required-indicator">*</span>
+                                </label>
+                                <input type="number" step="0.01" class="form-control-modern" name="price" id="price" 
+                                       value="<?php echo htmlspecialchars($product['price']); ?>" 
+                                       placeholder="0.00" min="0.01" required>
+                                <div class="form-hint">
+                                    <i class="fas fa-info-circle"></i>
+                                    Enter price in Sri Lankan Rupees
                                 </div>
                             </div>
-
-                            <!-- Product Description -->
-                            <div class="form-group">
-                                <label class="form-label">Product Description <span class="required">*</span></label>
-                                <textarea class="form-textarea-modern" name="description" id="productDescription" 
-                                          placeholder="Enter detailed product description..." maxlength="1000" required><?php echo htmlspecialchars($product['description']); ?></textarea>
-                                <div class="character-count">
-                                    <span id="descriptionCount">0</span>/1000 characters
+                        </div>
+                    </div>
+                    
+                    <!-- Weight and Stock -->
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group-modern">
+                                <label class="form-label-modern">
+                                    Weight
+                                    <span id="weight-required" class="required-indicator">*</span>
+                                </label>
+                                <input type="text" class="form-control-modern" name="weight" id="weight" 
+                                       value="<?php echo htmlspecialchars($product['weight']); ?>" 
+                                       placeholder="e.g., 1kg, 500g, 2.5kg">
+                                <div class="form-hint" id="weight-hint">
+                                    <i class="fas fa-info-circle"></i>
+                                    Include unit of measurement (kg, g, lbs, etc.)
                                 </div>
                             </div>
-
-                            <!-- Image Management -->
-                            <div class="form-group">
-                                <label class="form-label">Product Image</label>
-                                
-                                <?php if (!empty($product['image'])): ?>
-                                    <div class="current-image-section" id="currentImageSection">
-                                        <h6>Current Image:</h6>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="form-group-modern">
+                                <label class="form-label-modern">
+                                    Stock Quantity
+                                    <span class="required-indicator">*</span>
+                                </label>
+                                <input type="number" class="form-control-modern" name="stock" id="stock" 
+                                       value="<?php echo htmlspecialchars($product['stock']); ?>" 
+                                       placeholder="Available quantity" min="0" required>
+                                <div class="form-hint">
+                                    <i class="fas fa-info-circle"></i>
+                                    Current stock available for sale
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Image Management -->
+                    <div class="form-group-modern">
+                        <label class="form-label-modern">
+                            Product Image
+                        </label>
+                        
+                        <?php if ($product['image']): ?>
+                            <div class="current-image-section">
+                                <div class="row align-items-center">
+                                    <div class="col-md-4">
                                         <img src="../assets/images/products/<?php echo htmlspecialchars($product['image']); ?>" 
-                                             alt="Current Product Image" class="current-image">
-                                        <div class="image-actions">
-                                            <button type="button" class="btn-change-image" id="changeImageBtn">
-                                                <i class="fas fa-camera me-1"></i> Change Image
-                                            </button>
-                                            <button type="button" class="btn-remove-image" id="removeImageBtn">
-                                                <i class="fas fa-trash me-1"></i> Remove Image
-                                            </button>
+                                             alt="Current product image" class="current-image">
+                                    </div>
+                                    <div class="col-md-8">
+                                        <h6 class="mb-2"><i class="fas fa-image me-2"></i>Current Image</h6>
+                                        <p class="text-muted mb-3">This is the current product image. You can replace it by uploading a new image below.</p>
+                                        
+                                        <div class="remove-image-checkbox">
+                                            <input type="checkbox" name="remove_image" value="1" id="removeImage">
+                                            <label for="removeImage">
+                                                <i class="fas fa-trash me-1"></i>
+                                                Remove current image
+                                            </label>
                                         </div>
                                     </div>
-                                <?php endif; ?>
-                                
-                                <div class="image-upload-area" id="imageUploadArea" <?php echo !empty($product['image']) ? 'style="display: none;"' : ''; ?>>
-                                    <i class="fas fa-cloud-upload-alt" style="font-size: 3rem; color: #cbd5e0; margin-bottom: 16px;"></i>
-                                    <h5 style="color: #4a5568; margin-bottom: 8px;">Upload Product Image</h5>
-                                    <p style="color: #718096; margin-bottom: 16px;">Drag and drop or click to select</p>
-                                    <input type="file" name="image" id="imageInput" accept="image/*" style="display: none;">
-                                    <button type="button" class="btn-primary-modern" onclick="document.getElementById('imageInput').click();">
-                                        <i class="fas fa-upload me-2"></i>Choose Image
-                                    </button>
-                                    <div class="form-hint" style="margin-top: 12px;">
-                                        Supported formats: JPG, PNG, GIF. Maximum size: 5MB
-                                    </div>
                                 </div>
-                                
-                                <!-- Hidden input for remove image flag -->
-                                <input type="hidden" name="remove_image" id="removeImageFlag" value="0">
                             </div>
-
-                            <!-- Form Actions -->
-                            <div class="form-actions">
-                                <a href="manage_products.php" class="btn-secondary-modern">
-                                    <i class="fas fa-times me-2"></i>Cancel
-                                </a>
-                                <button type="submit" name="update_product" class="btn-primary-modern">
-                                    <i class="fas fa-save me-2"></i>Update Product
-                                </button>
+                        <?php endif; ?>
+                        
+                        <div class="image-upload-area" onclick="document.getElementById('image').click()">
+                            <div class="upload-icon">
+                                <i class="fas fa-cloud-upload-alt"></i>
                             </div>
-                        </form>
+                            <div class="upload-text">
+                                <?php echo $product['image'] ? 'Upload new image (optional)' : 'Click to upload product image'; ?>
+                            </div>
+                            <div class="upload-hint">Supported formats: JPEG, PNG, GIF (Max: 5MB)</div>
+                            <input type="file" class="d-none" name="image" id="image" accept="image/*">
+                        </div>
+                        <div id="imagePreview" class="text-center"></div>
                     </div>
-                </div>
+                    
+                    <!-- Description -->
+                    <div class="form-group-modern">
+                        <label class="form-label-modern">
+                            Product Description
+                            <span class="required-indicator">*</span>
+                        </label>
+                        <textarea class="form-control-modern" name="description" id="description" rows="4" 
+                                  placeholder="Provide detailed information about the product..." required><?php echo htmlspecialchars($product['description']); ?></textarea>
+                        <div class="form-hint">
+                            <i class="fas fa-info-circle"></i>
+                            Include features, benefits, and usage instructions
+                        </div>
+                    </div>
+                    
+                    <!-- Action Buttons -->
+                    <div class="text-end mt-4">
+                        <a href="manage_products.php" class="btn-modern btn-secondary-modern me-3">
+                            <i class="fas fa-arrow-left"></i>
+                            Back to Products
+                        </a>
+                        <button type="submit" name="update_product" class="btn-modern btn-success-modern">
+                            <i class="fas fa-save"></i>
+                            Update Product
+                        </button>
+                    </div>
+                    
+                </form>
             </div>
         </div>
     </div>
 </section>
 
 <script>
-// Character count for description
-document.getElementById('productDescription').addEventListener('input', function() {
-    const count = this.value.length;
-    document.getElementById('descriptionCount').textContent = count;
+function toggleWeightField() {
+    const category = document.getElementById('category').value;
+    const weightField = document.getElementById('weight');
+    const weightRequired = document.getElementById('weight-required');
+    const weightHint = document.getElementById('weight-hint');
     
-    if (count > 1000) {
-        this.value = this.value.substring(0, 1000);
-        document.getElementById('descriptionCount').textContent = 1000;
+    const weightOptionalCategories = ['Toys', 'Accessories', 'Dog Accessories', 'Cat Accessories'];
+    
+    if (weightOptionalCategories.includes(category)) {
+        weightField.required = false;
+        weightRequired.style.display = 'none';
+        weightHint.innerHTML = '<i class="fas fa-check-circle" style="color: #10b981;"></i> Weight is optional for this category';
+        weightHint.classList.add('weight-optional');
+        if (weightField.placeholder.includes('required')) {
+            weightField.placeholder = 'Optional - leave blank or enter N/A';
+        }
+    } else {
+        weightField.required = true;
+        weightRequired.style.display = 'inline';
+        weightHint.innerHTML = '<i class="fas fa-info-circle"></i> Include unit of measurement (kg, g, lbs, etc.)';
+        weightHint.classList.remove('weight-optional');
+        weightField.placeholder = 'e.g., 1kg, 500g, 2.5kg';
     }
-});
-
-// Initialize character count
-document.addEventListener('DOMContentLoaded', function() {
-    const description = document.getElementById('productDescription');
-    document.getElementById('descriptionCount').textContent = description.value.length;
-});
-
-// Image management functions
-document.getElementById('changeImageBtn')?.addEventListener('click', function() {
-    document.getElementById('imageUploadArea').style.display = 'block';
-    document.getElementById('imageInput').click();
-});
-
-document.getElementById('removeImageBtn')?.addEventListener('click', function() {
-    if (confirm('Are you sure you want to remove the current image?')) {
-        document.getElementById('currentImageSection').style.display = 'none';
-        document.getElementById('imageUploadArea').style.display = 'block';
-        document.getElementById('removeImageFlag').value = '1';
-    }
-});
+}
 
 // Image preview functionality
-document.getElementById('imageInput').addEventListener('change', function(e) {
+document.getElementById('image').addEventListener('change', function(e) {
     const file = e.target.files[0];
+    const preview = document.getElementById('imagePreview');
+    
     if (file) {
-        // Validate file size (5MB)
-        if (file.size > 5 * 1024 * 1024) {
-            alert('File size must be less than 5MB');
-            this.value = '';
-            return;
-        }
-        
-        // Validate file type
-        const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
-        if (!allowedTypes.includes(file.type)) {
-            alert('Only JPEG, PNG, and GIF images are allowed');
-            this.value = '';
-            return;
-        }
-        
-        // Show preview (optional)
         const reader = new FileReader();
         reader.onload = function(e) {
-            // You can add image preview functionality here if needed
-            console.log('Image selected:', file.name);
+            preview.innerHTML = `
+                <div class="mt-3">
+                    <h6 class="mb-2"><i class="fas fa-eye me-2"></i>New Image Preview</h6>
+                    <img src="${e.target.result}" alt="Preview" class="image-preview">
+                    <p class="mt-2 text-muted">${file.name}</p>
+                </div>
+            `;
         };
         reader.readAsDataURL(file);
+    } else {
+        preview.innerHTML = '';
     }
 });
 
-// Form validation
-document.getElementById('editProductForm').addEventListener('submit', function(e) {
-    const requiredFields = ['name', 'brand', 'category', 'price', 'weight', 'stock', 'description'];
-    let isValid = true;
+// Initialize weight field state on page load
+document.addEventListener('DOMContentLoaded', function() {
+    toggleWeightField();
+});
+
+// Drag and drop functionality
+const uploadArea = document.querySelector('.image-upload-area');
+
+uploadArea.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    uploadArea.classList.add('dragover');
+});
+
+uploadArea.addEventListener('dragleave', () => {
+    uploadArea.classList.remove('dragover');
+});
+
+uploadArea.addEventListener('drop', (e) => {
+    e.preventDefault();
+    uploadArea.classList.remove('dragover');
     
-    requiredFields.forEach(function(field) {
-        const input = document.getElementsByName(field)[0];
-        if (!input.value.trim()) {
-            isValid = false;
-            input.style.borderColor = '#ef4444';
-        } else {
-            input.style.borderColor = '#e5e7eb';
-        }
-    });
-    
-    if (!isValid) {
-        e.preventDefault();
-        alert('Please fill all required fields');
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+        document.getElementById('image').files = files;
+        document.getElementById('image').dispatchEvent(new Event('change'));
     }
 });
 </script>
 
-<?php
-// Include footer
-include_once '../includes/footer.php';
-
-// Close database connection
-$conn->close();
-?>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
