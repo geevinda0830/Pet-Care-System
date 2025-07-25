@@ -51,17 +51,17 @@ $base_url = "http://localhost/pet_care_system";
             color: white !important;
         }
         
-        .brand-icon {
-            width: 45px;
-            height: 45px;
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.3rem;
-            transition: all 0.3s ease;
-        }
+       .brand-icon {
+    width: 45px;
+    height: 45px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center; /* FIXED: Added missing value 'center' */
+    font-size: 1.3rem;
+    transition: all 0.3s ease;
+}
         
         .navbar-brand-modern:hover .brand-icon {
             background: rgba(255, 255, 255, 0.3);
