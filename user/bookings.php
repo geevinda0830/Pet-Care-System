@@ -273,7 +273,7 @@ include_once '../includes/header.php';
                                 </div>
                                 <div class="detail-content">
                                     <span class="detail-label">Total Cost</span>
-                                    <span class="detail-value cost">$<?php echo number_format($total_cost, 2); ?></span>
+                                    <span class="detail-value cost">Rs.<?php echo number_format($total_cost, 2); ?></span>
                                 </div>
                             </div>
                         </div>
@@ -301,7 +301,7 @@ include_once '../includes/header.php';
                                         <i class="fas fa-check-circle me-1"></i> Sitter accepted! Payment required
                                     </div>
                                     <a href="../payment.php?type=booking&booking_id=<?php echo $booking['bookingID']; ?>" class="btn btn-success btn-sm payment-btn">
-                                        <i class="fas fa-credit-card me-1"></i> Pay Now ($<?php echo number_format($total_cost, 2); ?>)
+                                        <i class="fas fa-credit-card me-1"></i> Pay Now (Rs.<?php echo number_format($total_cost, 2); ?>)
                                     </a>
                                 </div>
                                 <form action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>" method="post" class="d-inline" onsubmit="return confirm('Are you sure you want to cancel this confirmed booking?');">
