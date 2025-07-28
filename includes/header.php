@@ -6,25 +6,6 @@ if (session_status() == PHP_SESSION_NONE) {
 
 // Base URL - update with your project path
 $base_url = "http://localhost/pet_care_system";
-
-// Get cart count for pet owners
-$cart_count = 0;
-if (isset($_SESSION['user_id']) && $_SESSION['user_type'] === 'pet_owner') {
-    require_once (strpos(__FILE__, 'user/') !== false ? '../' : '') . 'config/db_connect.php';
-    
-    $cart_count_sql = "SELECT COALESCE(SUM(ci.quantity), 0) as total_items 
-                       FROM cart c 
-                       LEFT JOIN cart_items ci ON c.cartID = ci.cartID 
-                       WHERE c.userID = ? AND c.orderID IS NULL";
-    $cart_count_stmt = $conn->prepare($cart_count_sql);
-    if ($cart_count_stmt) {
-        $cart_count_stmt->bind_param("i", $_SESSION['user_id']);
-        $cart_count_stmt->execute();
-        $cart_result = $cart_count_stmt->get_result();
-        $cart_count = $cart_result->fetch_assoc()['total_items'] ?? 0;
-        $cart_count_stmt->close();
-    }
-}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -127,39 +108,6 @@ if (isset($_SESSION['user_id']) && $_SESSION['user_type'] === 'pet_owner') {
         
         .nav-link-modern.active::before {
             width: 80%;
-        }
-
-        /* Cart Badge Styles */
-        .cart-link {
-            position: relative;
-        }
-
-        .cart-badge {
-            position: absolute;
-            top: -8px;
-            right: -8px;
-            background: #ef4444;
-            color: white;
-            border-radius: 50%;
-            width: 20px;
-            height: 20px;
-            font-size: 0.75rem;
-            font-weight: 700;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            line-height: 1;
-            animation: cartPulse 0.5s ease-in-out;
-        }
-
-        @keyframes cartPulse {
-            0% { transform: scale(0.8); }
-            50% { transform: scale(1.2); }
-            100% { transform: scale(1); }
-        }
-
-        .nav-link-modern:hover .cart-badge {
-            background: #dc2626;
         }
         
         /* FIXED: Dropdown Menu Styles */
@@ -288,15 +236,6 @@ if (isset($_SESSION['user_id']) && $_SESSION['user_type'] === 'pet_owner') {
                 background: rgba(102, 126, 234, 0.2) !important;
                 color: #333 !important;
             }
-
-            /* Mobile responsive cart badge */
-            .cart-badge {
-                top: -5px;
-                right: -5px;
-                width: 18px;
-                height: 18px;
-                font-size: 0.7rem;
-            }
         }
     </style>
 </head>
@@ -347,16 +286,6 @@ if (isset($_SESSION['user_id']) && $_SESSION['user_type'] === 'pet_owner') {
                 <ul class="navbar-nav">
                     <?php if(isset($_SESSION['user_id']) && isset($_SESSION['user_type'])): ?>
                         <?php if($_SESSION['user_type'] === 'pet_owner'): ?>
-                            <!-- Cart for Pet Owners -->
-                            <li class="nav-item position-relative">
-                                <a class="nav-link-modern cart-link" href="<?php echo $base_url; ?>/cart.php">
-                                    <i class="fas fa-shopping-cart me-1"></i> Cart
-                                    <?php if ($cart_count > 0): ?>
-                                        <span class="cart-badge"><?php echo $cart_count; ?></span>
-                                    <?php endif; ?>
-                                </a>
-                            </li>
-                            
                             <li class="nav-item dropdown">
                                 <a class="nav-link-modern dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                                     <div class="user-avatar">

@@ -1,6 +1,9 @@
-/* Pet Care & Sitting System - Complete Fixed CSS */
+/* Pet Care & Sitting System - Consolidated Fixed CSS */
+/* This file resolves all style conflicts and provides clean, consistent styling */
 
-/* CSS Custom Properties */
+/* ========================================
+   CSS Custom Properties
+======================================== */
 :root {
     --primary-color: #3498db;
     --secondary-color: #2ecc71;
@@ -12,9 +15,13 @@
     --light-color: #f8f9fa;
     --dark-color: #343a40;
     --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --border-radius: 12px;
+    --transition: all 0.3s ease;
 }
 
-/* Base Styles */
+/* ========================================
+   Base Styles Reset
+======================================== */
 * {
     margin: 0;
     padding: 0;
@@ -28,371 +35,85 @@ body {
     background-color: #f8f9ff;
 }
 
-/* FIXED FORM STYLES - No sizing issues */
+/* ========================================
+   FORM CONTROLS - CONSOLIDATED & FIXED
+======================================== */
 
-/* Form Control - Fixed Height and Consistent Sizing */
+/* Base Form Control - Single Source of Truth */
 .form-control-modern {
-    padding: 16px 16px 16px 48px;
-    border: 2px solid #e5e7eb;
-    border-radius: 12px;
-    font-size: 1rem;
-    background: rgba(255, 255, 255, 0.8);
+    display: block;
     width: 100%;
-    height: 56px !important; /* Fixed height prevents shrinking */
-    box-sizing: border-box !important;
-    min-width: 0;
-    flex: 1 1 auto;
-    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out; /* No size transitions */
+    height: 56px;
+    padding: 16px 16px 16px 48px;
+    box-sizing: border-box;
+    font-family: inherit;
+    font-size: 1rem;
     font-weight: 400;
     line-height: 1.5;
     color: #212529;
+    background: rgba(255, 255, 255, 0.8);
+    border: 2px solid #e5e7eb;
+    border-radius: var(--border-radius);
     appearance: none;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out, background-color 0.15s ease-in-out;
 }
 
-/* Password input specific */
 .form-control-modern[type="password"] {
-    padding-right: 56px !important; /* Space for toggle button */
+    padding-right: 56px;
 }
 
-/* Focus State - Maintain Fixed Size */
 .form-control-modern:focus {
-    border-color: #667eea;
+    border-color: var(--accent-color);
     box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
     background: white;
     outline: 0;
-    height: 56px !important; /* Maintain height */
-    padding: 16px 16px 16px 48px !important; /* Maintain padding */
-    transform: none !important; /* No transforms */
 }
 
-/* Validation States - NO SIZE CHANGES */
+/* Validation States */
 .form-control-modern.is-valid {
-    border-color: #28a745;
+    border-color: var(--success-color);
     box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.1);
-    height: 56px !important; /* Fixed height */
-    padding: 16px 16px 16px 48px !important; /* Fixed padding */
 }
 
 .form-control-modern.is-invalid {
-    border-color: #dc3545;
+    border-color: var(--danger-color);
     box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.1);
-    height: 56px !important; /* Fixed height */
-    padding: 16px 16px 16px 48px !important; /* Fixed padding */
 }
 
-/* Password fields maintain button space */
-.form-control-modern[type="password"].is-valid,
-.form-control-modern[type="password"].is-invalid {
-    padding-right: 56px !important;
+/* ========================================
+   LOGIN PAGE SPECIFIC OVERRIDES
+======================================== */
+.login-page .form-control-modern,
+body[data-page="login"] .form-control-modern {
+    border-color: #e5e7eb;
+    box-shadow: none;
 }
 
-/* Input Group Container */
-.input-group-modern {
-    position: relative;
-    display: flex;
-    align-items: stretch;
-    width: 100%;
+.login-page .form-control-modern:focus,
+body[data-page="login"] .form-control-modern:focus {
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
-.input-group-modern .form-control-modern {
-    position: relative;
-    flex: 1 1 auto;
-    width: 1%;
-    min-width: 0;
-}
-
-/* Input Icons */
-.input-icon {
-    position: absolute;
-    left: 16px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: #9ca3af;
-    z-index: 2;
-    pointer-events: none;
-    font-size: 1rem;
-}
-
-/* Password Toggle Button */
-.password-toggle {
-    position: absolute;
-    right: 16px;
-    top: 50%;
-    transform: translateY(-50%);
-    background: none;
-    border: none;
-    color: #9ca3af;
-    cursor: pointer;
-    z-index: 3;
-    padding: 8px;
-    border-radius: 4px;
-    transition: all 0.3s ease;
-    width: 40px;
-    height: 40px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.password-toggle:hover {
-    color: #667eea;
-    background-color: rgba(102, 126, 234, 0.1);
-}
-
-.password-toggle:focus {
-    outline: none;
-    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
-}
-
-/* Form Groups */
-.form-group-modern {
-    margin-bottom: 1.5rem;
-    width: 100%;
-}
-
-.form-group-modern .form-label {
-    margin-bottom: 0.5rem;
-    font-weight: 500;
-    color: #374151;
-    display: block;
-}
-
-/* VALIDATION FEEDBACK - POSITIONED BELOW INPUTS */
-.validation-feedback {
-    font-size: 0.8rem;
-    margin-top: 0.25rem;
-    padding: 0;
-    line-height: 1.4;
-    width: 100%;
-    display: block;
-    position: static !important; /* Not absolute positioning */
-    left: auto !important;
-    right: auto !important;
-    top: auto !important;
-}
-
-.valid-feedback {
-    color: #28a745;
-}
-
-.invalid-feedback {
-    color: #dc3545;
-}
-
-/* Remove validation icons that might affect sizing */
-.form-control-modern.is-valid::after,
-.form-control-modern.is-invalid::after {
-    display: none !important;
-}
-
-/* Button Styles */
-.btn {
-    border-radius: 8px;
-    font-weight: 500;
-    transition: all 0.3s ease;
-    padding: 12px 24px;
-    font-size: 1rem;
-    line-height: 1.5;
-    text-align: center;
-    vertical-align: middle;
-    cursor: pointer;
-    border: 1px solid transparent;
-    text-decoration: none;
-    display: inline-block;
-}
-
-.btn-lg {
-    padding: 12px 32px;
-    font-size: 1.1rem;
-}
-
-.btn-primary-gradient {
-    height: 56px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border: none;
-    color: white;
-    padding: 12px 32px;
-    transition: all 0.3s ease;
-}
-
-.btn-primary-gradient:hover {
-    background: linear-gradient(135deg, #5a6fd8 0%, #6c5598 100%);
-    transform: translateY(-2px);
-    box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
-}
-
-/* Mobile Responsiveness */
-@media (max-width: 768px) {
-    .form-control-modern {
-        height: 52px !important;
-        padding: 14px 14px 14px 44px !important;
-        font-size: 16px; /* Prevent zoom on iOS */
-    }
-    
-    .form-control-modern[type="password"] {
-        padding-right: 52px !important;
-    }
-    
-    .input-icon {
-        left: 14px;
-    }
-    
-    .password-toggle {
-        right: 14px;
-        width: 36px;
-        height: 36px;
-    }
-    
-    .validation-feedback {
-        font-size: 0.75rem;
-    }
-}
-
-/* Utility Classes */
-.text-gradient {
-    background: linear-gradient(135deg, #667eea, #764ba2);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-}
-
-.bg-gradient-primary {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-}
-
-/* Remove any conflicting Bootstrap validation styles */
-.was-validated .form-control:valid,
-.form-control.is-valid {
-    height: 56px !important;
-    padding: 16px 16px 16px 48px !important;
-}
-
-.was-validated .form-control:invalid,
-.form-control.is-invalid {
-    height: 56px !important;
-    padding: 16px 16px 16px 48px !important;
-}
-
-/* Animation for validation feedback */
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(-10px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-.validation-feedback {
-    animation: fadeIn 0.3s ease-out;
-}
-
-/* Ensure no transforms affect input sizing */
-.form-control-modern:focus,
-.form-control-modern:hover {
-    transform: none !important;
-}
-
-/* Login Page Specific - Disable ALL validation styling */
-
-/* Force remove validation styles on login pages */
-.login-page .form-control-modern.is-valid,
-.login-page .form-control-modern.is-invalid,
-body:has([action*="login"]) .form-control-modern.is-valid,
-body:has([action*="login"]) .form-control-modern.is-invalid {
-    border-color: #e5e7eb !important;
-    box-shadow: 0 0 0 3px rgba(229, 231, 235, 0.1) !important;
-}
-
-/* Hide validation feedback on login pages */
 .login-page .validation-feedback,
-body:has([action*="login"]) .validation-feedback {
-    display: none !important;
+body[data-page="login"] .validation-feedback {
+    display: none;
 }
 
-/* Hide validation icons on login pages */
-.login-page .form-control-modern::after,
-body:has([action*="login"]) .form-control-modern::after {
-    display: none !important;
-}
-
-/* Additional selectors for login forms */
-form[action*="login"] .validation-feedback,
-form:has(button:contains("Sign In")) .validation-feedback,
-.auth-form-container:has(h2:contains("Sign In")) .validation-feedback {
-    display: none !important;
-}
-
-form[action*="login"] .form-control-modern.is-valid,
-form[action*="login"] .form-control-modern.is-invalid,
-form:has(button:contains("Sign In")) .form-control-modern.is-valid,
-form:has(button:contains("Sign In")) .form-control-modern.is-invalid {
-    border-color: #e5e7eb !important;
-    box-shadow: 0 0 0 3px rgba(229, 231, 235, 0.1) !important;
-}
-
-/* Ensure login inputs maintain consistent styling */
-.form-control-modern {
-    padding: 16px 16px 16px 48px !important;
-    border: 2px solid #e5e7eb !important;
-    border-radius: 12px !important;
-    font-size: 1rem !important;
-    background: rgba(255, 255, 255, 0.8) !important;
-    width: 100% !important;
-    height: 56px !important;
-    box-sizing: border-box !important;
-    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out !important;
-}
-
-.form-control-modern:focus {
-    border-color: #667eea !important;
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1) !important;
-    background: white !important;
-    height: 56px !important;
-    padding: 16px 16px 16px 48px !important;
-}
-
-.form-control-modern[type="password"] {
-    padding-right: 56px !important;
-}
-
-/* Force clean state for all inputs */
-input.form-control-modern {
-    border-color: #e5e7eb !important;
-}
-
-input.form-control-modern:focus {
-    border-color: #667eea !important;
-}
-
-/* Remove any conflicting Bootstrap validation */
+/* ========================================
+   BOOTSTRAP OVERRIDE FIXES
+======================================== */
 .was-validated .form-control:valid,
 .was-validated .form-control:invalid,
 .form-control.is-valid,
 .form-control.is-invalid {
-    border-color: #e5e7eb !important;
-    background-image: none !important;
-    padding-right: auto !important;
+    background-image: none;
+    padding-right: inherit;
 }
 
-/* Specifically target login forms */
-body:has(.auth-form-container h2:contains("Sign In")) .form-control-modern.is-valid,
-body:has(.auth-form-container h2:contains("Sign In")) .form-control-modern.is-invalid {
-    border-color: #e5e7eb !important;
-    box-shadow: none !important;
-}
-
-/* Override any existing validation classes */
-.form-control.is-valid,
-.form-control.is-invalid {
-    border-color: #e5e7eb !important;
-    padding: 16px 16px 16px 48px !important;
-    height: 56px !important;
-    background: rgba(255, 255, 255, 0.8) !important;
-}
-
-.form-control[type="password"].is-valid,
-.form-control[type="password"].is-invalid {
-    padding-right: 56px !important;
-}
-
-/* Auth Container Styles */
+/* ========================================
+   AUTH CONTAINER STYLES
+======================================== */
 .auth-container {
     min-height: 100vh;
     display: flex;
@@ -413,90 +134,19 @@ body:has(.auth-form-container h2:contains("Sign In")) .form-control-modern.is-in
     border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-.auth-header {
-    text-align: center;
-    margin-bottom: 32px;
-}
-
-.auth-title {
-    font-size: 2rem;
-    font-weight: 700;
-    color: #1f2937;
-    margin-bottom: 8px;
-}
-
-.auth-subtitle {
-    color: #6b7280;
-    font-size: 1rem;
-}
-
-.auth-link {
-    color: #6b7280;
-    text-decoration: none;
-    transition: color 0.3s ease;
-}
-
-.auth-link:hover {
-    color: #764ba2;
-    text-decoration: none;
-}
-
-.auth-link-primary {
-    color: #667eea;
-    text-decoration: none;
-    font-weight: 600;
-}
-
-.auth-link-primary:hover {
-    color: #764ba2;
-    text-decoration: none;
-}
-
-.auth-footer {
-    text-align: center;
-    color: #64748b;
-    margin-top: 1rem;
-}
-
-/* Form Check */
-.form-check {
-    margin-bottom: 0;
-}
-
-.form-check-input {
-    width: 1.2em;
-    height: 1.2em;
-    margin-top: 0.125em;
-    margin-right: 0.5em;
-}
-
-.form-check-label {
-    font-size: 0.9rem;
-    color: #6b7280;
-}
-
-/* Container and Layout */
-.container-fluid {
-    padding-left: 0;
-    padding-right: 0;
-}
-
-.card {
-    border: none;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
-    border-radius: 12px;
-}
-
-/* Navigation Styles */
+/* ========================================
+   NAVBAR STYLES - FIXED
+======================================== */
 .navbar-modern {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     backdrop-filter: blur(20px);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    padding: 20px 0;
-    box-shadow: 0 4px 20px rgba(102, 126, 234, 0.3);
+    border: none;
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+    transition: var(--transition);
+    padding: 12px 0;
     position: sticky;
     top: 0;
-    z-index: 1050;
+    z-index: 1030;
 }
 
 .navbar-brand-modern {
@@ -507,12 +157,7 @@ body:has(.auth-form-container h2:contains("Sign In")) .form-control-modern.is-in
     font-size: 1.5rem;
     color: white !important;
     text-decoration: none;
-    transition: all 0.3s ease;
-}
-
-.navbar-brand-modern:hover {
-    transform: scale(1.02);
-    color: white !important;
+    transition: var(--transition);
 }
 
 .brand-icon {
@@ -526,52 +171,295 @@ body:has(.auth-form-container h2:contains("Sign In")) .form-control-modern.is-in
     font-size: 1.5rem;
 }
 
-/* Hero Section */
-.hero-section {
+.nav-link-modern {
+    color: rgba(255, 255, 255, 0.9);
+    font-weight: 500;
+    padding: 12px 20px;
+    border-radius: 8px;
+    margin: 0 4px;
+    position: relative;
+    text-decoration: none;
+    transition: var(--transition);
+}
+
+.nav-link-modern::before {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    width: 0;
+    height: 2px;
+    background: white;
+    transition: var(--transition);
+    transform: translateX(-50%);
+}
+
+.nav-link-modern:hover {
+    color: white;
+    background: rgba(255, 255, 255, 0.15);
+    transform: translateY(-2px);
+}
+
+.nav-link-modern:hover::before {
+    width: 80%;
+}
+
+.nav-link-modern.active {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+}
+
+/* Cart Badge */
+.cart-link {
+    position: relative;
+}
+
+.cart-badge {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background: var(--danger-color);
+    color: white;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    animation: cartPulse 0.5s ease-in-out;
+}
+
+@keyframes cartPulse {
+    0% { transform: scale(0.8); }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+}
+
+/* ========================================
+   DROPDOWN MENUS - FIXED
+======================================== */
+.dropdown-menu-modern {
+    background: white;
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: var(--border-radius);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+    padding: 8px;
+    z-index: 9999;
+    min-width: 200px;
+    margin-top: 8px;
+}
+
+.dropdown-item-modern {
+    padding: 12px 20px;
+    border-radius: 8px;
+    color: #333;
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+}
+
+.dropdown-item-modern:hover {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
-    padding: 120px 0;
+}
+
+/* ========================================
+   ALERT STYLES
+======================================== */
+.alert-modern {
+    border: none;
+    border-radius: var(--border-radius);
+    padding: 16px 20px;
+    font-weight: 500;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+
+.alert-success {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+}
+
+.alert-danger {
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    color: white;
+}
+
+/* ========================================
+   PAGE HEADER STYLES
+======================================== */
+.page-header-modern {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 80px 0;
     position: relative;
     overflow: hidden;
 }
 
-.hero-content {
+.page-header-modern::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="20" cy="20" r="1" fill="rgba(255,255,255,0.1)"/><circle cx="80" cy="40" r="0.5" fill="rgba(255,255,255,0.1)"/><circle cx="40" cy="80" r="1.5" fill="rgba(255,255,255,0.1)"/></svg>');
+    animation: float 20s infinite linear;
+}
+
+@keyframes float {
+    0% { transform: translateY(0px) rotate(0deg); }
+    100% { transform: translateY(-100px) rotate(360deg); }
+}
+
+.page-header-content {
     position: relative;
     z-index: 2;
 }
 
-.hero-badge {
-    display: inline-flex;
-    align-items: center;
+.page-badge {
     background: rgba(255, 255, 255, 0.2);
     padding: 8px 16px;
     border-radius: 50px;
-    margin-bottom: 24px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-bottom: 16px;
+    display: inline-block;
     backdrop-filter: blur(10px);
 }
 
-.badge-icon {
-    margin-right: 8px;
-    font-size: 1.2em;
-}
-
-.hero-title {
+.page-title {
     font-size: 3.5rem;
     font-weight: 800;
     line-height: 1.2;
-    margin-bottom: 24px;
+    margin-bottom: 16px;
 }
 
-.hero-description {
+.page-subtitle {
     font-size: 1.2rem;
-    margin-bottom: 32px;
     opacity: 0.9;
-    max-width: 500px;
+    margin-bottom: 0;
 }
 
-.hero-stats {
+/* ========================================
+   BUTTONS
+======================================== */
+.btn-modern {
+    padding: 12px 32px;
+    border-radius: var(--border-radius);
+    font-weight: 600;
+    font-size: 1rem;
+    border: none;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: var(--transition);
+}
+
+.btn-primary-modern {
+    background: linear-gradient(135deg, var(--accent-color) 0%, #764ba2 100%);
+    color: white;
+}
+
+.btn-primary-modern:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+}
+
+/* ========================================
+   RESPONSIVE DESIGN
+======================================== */
+@media (max-width: 768px) {
+    .page-title {
+        font-size: 2.5rem;
+    }
+    
+    .auth-form-container {
+        padding: 32px 24px;
+        margin: 0 16px;
+    }
+    
+    .form-control-modern {
+        padding: 14px 14px 14px 40px;
+        height: 50px;
+    }
+    
+    .form-control-modern[type="password"] {
+        padding-right: 50px;
+    }
+}
+
+@media (max-width: 576px) {
+    .navbar-modern {
+        padding: 8px 0;
+    }
+    
+    .nav-link-modern {
+        padding: 10px 16px;
+        margin: 0 2px;
+    }
+    
+    .page-header-modern {
+        padding: 60px 0;
+    }
+    
+    .page-title {
+        font-size: 2rem;
+    }
+}
+
+/* ========================================
+   UTILITY CLASSES
+======================================== */
+.main-content {
+    flex: 1;
+}
+
+.content-section-modern {
+    padding: 80px 0;
+    background: white;
+}
+
+.user-avatar {
+    width: 35px;
+    height: 35px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
     display: flex;
-    gap: 2rem;
-    margin-top: 2rem;
+    align-items: center;
     justify-content: center;
+    margin-right: 8px;
+}
+
+/* ========================================
+   CONFLICT PREVENTION
+======================================== */
+.form-control-modern {
+    background-clip: padding-box !important;
+}
+
+.navbar-modern {
+    z-index: 1030;
+}
+
+.dropdown-menu-modern {
+    z-index: 1040;
+}
+
+.modal {
+    z-index: 1050;
+}
+
+.form-control-modern,
+.form-control-modern:focus,
+.form-control-modern.is-valid,
+.form-control-modern.is-invalid {
+    transform: none;
 }
