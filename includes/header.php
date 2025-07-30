@@ -306,6 +306,9 @@ $base_url = "http://localhost/pet_care_system";
                                     <li><a class="dropdown-item dropdown-item-modern" href="<?php echo $base_url; ?>/user/orders.php">
                                         <i class="fas fa-shopping-bag"></i> My Orders
                                     </a></li>
+                                      <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item dropdown-item-modern" href="<?php echo $base_url; ?>/user/customer_refund_request.php">
+                <i class="fas fa-undo-alt"></i> Request Refund
                                     <li><hr class="dropdown-divider"></li>
                                     <li><a class="dropdown-item dropdown-item-modern" href="<?php echo $base_url; ?>/logout.php">
                                         <i class="fas fa-sign-out-alt"></i> Logout
@@ -354,6 +357,9 @@ $base_url = "http://localhost/pet_care_system";
                                     <li><a class="dropdown-item dropdown-item-modern" href="<?php echo $base_url; ?>/admin/manage_products.php">
                                         <i class="fas fa-box"></i> Manage Products
                                     </a></li>
+                                    <li><a class="dropdown-item dropdown-item-modern" href="<?php echo $base_url; ?>/admin/refund_management.php">
+                <i class="fas fa-undo-alt"></i> Refund Management
+            </a></li>
                                     <li><hr class="dropdown-divider"></li>
                                     <li><a class="dropdown-item dropdown-item-modern" href="<?php echo $base_url; ?>/logout.php">
                                         <i class="fas fa-sign-out-alt"></i> Logout
