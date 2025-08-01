@@ -11,6 +11,8 @@ if (session_status() == PHP_SESSION_NONE) {
     session_start();
 }
 
+include_once '../includes/header.php';
+
 // Check if user is logged in as admin
 if (!isset($_SESSION['user_id']) || $_SESSION['user_type'] !== 'admin') {
     $_SESSION['error_message'] = "You must be logged in as an administrator to access this page.";
@@ -354,7 +356,7 @@ $stats = $stats_result->fetch_assoc();
     </div>
 
     <!-- Header Section -->
-    <div class="header-section">
+    <!-- <div class="header-section">
         <div class="container">
             <div class="row align-items-center">
                 <div class="col-md-8">
@@ -374,7 +376,8 @@ $stats = $stats_result->fetch_assoc();
                 </div>
             </div>
         </div>
-    </div>
+    </div> -->
+    
 
     <div class="container-fluid">
         <!-- Success/Error Messages -->

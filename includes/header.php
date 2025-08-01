@@ -303,6 +303,9 @@ $base_url = "http://localhost/pet_care_system";
                                     <li><a class="dropdown-item dropdown-item-modern" href="<?php echo $base_url; ?>/user/bookings.php">
                                         <i class="fas fa-calendar-alt"></i> My Bookings
                                     </a></li>
+                                    <li><a class="dropdown-item dropdown-item-modern" href="<?php echo $base_url; ?>/cart.php">
+                                        <i class="fas fa-shopping-cart"></i> My Cart
+                                    </a></li>
                                     <li><a class="dropdown-item dropdown-item-modern" href="<?php echo $base_url; ?>/user/orders.php">
                                         <i class="fas fa-shopping-bag"></i> My Orders
                                     </a></li>

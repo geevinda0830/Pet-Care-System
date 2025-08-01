@@ -11,6 +11,7 @@ if (session_status() == PHP_SESSION_NONE) {
     session_start();
 }
 
+
 // Check if user is logged in as pet owner
 if (!isset($_SESSION['user_id']) || $_SESSION['user_type'] !== 'pet_owner') {
     $_SESSION['error_message'] = "You must be logged in as a pet owner to access this page.";
@@ -20,6 +21,8 @@ if (!isset($_SESSION['user_id']) || $_SESSION['user_type'] !== 'pet_owner') {
 
 // Include database connection
 require_once '../config/db_connect.php';
+
+include_once '../includes/header.php';
 
 $customer_id = $_SESSION['user_id'];
 $message = '';
@@ -492,7 +495,7 @@ if ($existing_refunds_stmt) {
     </div>
 
     <!-- Header Section -->
-    <div class="header-section">
+    <!-- <div class="header-section">
         <div class="container">
             <div class="row align-items-center">
                 <div class="col-md-8">
@@ -512,7 +515,7 @@ if ($existing_refunds_stmt) {
                 </div>
             </div>
         </div>
-    </div>
+    </div> -->
 
     <div class="container">
         <!-- Success/Error Messages -->
