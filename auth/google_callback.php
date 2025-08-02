@@ -1,5 +1,5 @@
 <?php
-// Google OAuth Callback Handler - Pet Owner Only
+// Google OAuth Callback Handler - Pet Owner Only - FIXED
 // File: auth/google_callback.php
 
 session_start();
@@ -67,18 +67,18 @@ try {
     $stmt->close();
     
     if ($existing_pet_owner) {
-        // Pet owner exists - update Google ID and login (FIXED: using correct field name userID)
+        // Pet owner exists - update Google ID and login
         $user_id = $existing_pet_owner['userID'];
         
-        // Update Google ID if not set
+        // Update Google ID if not set - FIXED SQL
         if (empty($existing_pet_owner['google_id'])) {
-            $update_stmt = $conn->prepare("UPDATE pet_owner SET google_id = ?, profileImage = ?, auth_provider = 'google', email_verified = 1, updated_at = NOW() WHERE userID = ?");
-            $update_stmt->bind_param("ssi", $google_id, $profile_picture, $user_id);
+            $update_stmt = $conn->prepare("UPDATE pet_owner SET google_id = ?, auth_provider = 'google', email_verified = 1, updated_at = NOW() WHERE userID = ?");
+            $update_stmt->bind_param("si", $google_id, $user_id);
             $update_stmt->execute();
             $update_stmt->close();
         }
         
-        // Set session variables for pet owner (FIXED: using correct field name)
+        // Set session variables for pet owner
         $_SESSION['user_id'] = $user_id;
         $_SESSION['user_type'] = 'pet_owner';
         $_SESSION['user_name'] = $existing_pet_owner['fullName'];
@@ -90,21 +90,21 @@ try {
         $auth_provider = 'google';
         $email_verified = $verified_email ? 1 : 0;
         
-        // Generate default values (FIXED: using correct field names for your table structure)
+        // Generate default values
         $default_contact = '';
         $default_address = '';
         $default_gender = 'Other';
         $default_username = strtolower(str_replace(' ', '', $first_name . $last_name)) . rand(100, 999);
         
-        // Insert new pet owner (FIXED: using correct field names and required fields)
-        $insert_stmt = $conn->prepare("INSERT INTO pet_owner (username, password, fullName, email, google_id, auth_provider, email_verified, contact, address, gender, created_at, updated_at) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())");
-        $insert_stmt->bind_param("ssssssss", $default_username, $full_name, $email, $google_id, $auth_provider, $email_verified, $default_contact, $default_address, $default_gender);
+        // Insert new pet owner - FIXED parameter count
+        $insert_stmt = $conn->prepare("INSERT INTO pet_owner (username, fullName, email, google_id, auth_provider, email_verified, contact, address, gender, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())");
+        $insert_stmt->bind_param("sssssssss", $default_username, $full_name, $email, $google_id, $auth_provider, $email_verified, $default_contact, $default_address, $default_gender);
         
         if ($insert_stmt->execute()) {
             $user_id = $conn->insert_id;
             $insert_stmt->close();
             
-            // Set session variables for new pet owner (FIXED: using correct field name)
+            // Set session variables for new pet owner
             $_SESSION['user_id'] = $user_id;
             $_SESSION['user_type'] = 'pet_owner';
             $_SESSION['user_name'] = $full_name;
@@ -112,12 +112,13 @@ try {
             $_SESSION['success_message'] = 'Welcome to PetCare System! Your account has been created successfully with Google!';
             
         } else {
-            throw new Exception('Failed to create pet owner account');
+            throw new Exception('Failed to create pet owner account: ' . $conn->error);
         }
     }
     
     // Clean up session state
     unset($_SESSION['google_oauth_state']);
+    unset($_SESSION['google_oauth_state_time']);
     
     // Redirect to pet owner dashboard
     header('Location: ../user/dashboard.php');
@@ -126,7 +127,7 @@ try {
 } catch (Exception $e) {
     // Log error and redirect with message
     error_log('Google OAuth Error: ' . $e->getMessage());
-    $_SESSION['error_message'] = 'Authentication failed. Please try again or use regular login.';
+    $_SESSION['error_message'] = 'Authentication failed: ' . $e->getMessage();
     header('Location: ../login.php');
     exit();
 }

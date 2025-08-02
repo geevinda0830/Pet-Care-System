@@ -494,28 +494,7 @@ if ($existing_refunds_stmt) {
         </div>
     </div>
 
-    <!-- Header Section -->
-    <!-- <div class="header-section">
-        <div class="container">
-            <div class="row align-items-center">
-                <div class="col-md-8">
-                    <h1><i class="fas fa-undo-alt me-3"></i>Request a Refund</h1>
-                    <p class="mb-0">Need a refund? We're here to help! Follow the simple steps below to submit your request.</p>
-                </div>
-                <div class="col-md-4 text-md-end">
-                    <div class="d-flex align-items-center justify-content-md-end">
-                        <div class="me-3">
-                            <i class="fas fa-clock fa-2x opacity-75"></i>
-                        </div>
-                        <div>
-                            <small class="opacity-75">Average processing time</small>
-                            <div class="fw-bold">2-3 business days</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div> -->
+    
 
     <div class="container">
         <!-- Success/Error Messages -->
